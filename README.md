@@ -7,13 +7,22 @@
 > 自動投稿ボットは利用規約違反（発覚するとアカウント停止＝収益ゼロ）です。
 > そのため本アプリは規約の範囲内で、投稿以外の全工程を自動化します。
 
+## 公開版（ふだんはこちらを使う）
+
+**https://kaneshiro0101-pixel.github.io/room-navi/** （GitHub Pages。スマホは「ホーム画面に追加」推奨）
+
+> 2026年の楽天API新仕様により、商品検索は楽天側に登録したドメイン（上記URL）からしか動きません。
+> `index.html` をダブルクリックで開いても検索以外（投稿文生成・ストック・実績）は全部使えます。
+
 ## 使い方（最初の1回だけ）
 
-1. `index.html` をダブルクリックで開く（ビルド・インストール不要）
+1. 上記URLを開く
 2. 「⚙️設定」タブで楽天APIキーを保存
-   - **アプリID（必須）**: [楽天ウェブサービス](https://webservice.rakuten.co.jp/) にログイン→「アプリID発行」（無料・即時）
+   - **アプリID（必須）**: [楽天ウェブサービス](https://webservice.rakuten.co.jp/) でアプリ作成すると表示（無料）
+   - **アクセスキー（必須）**: アプリIDと同じ画面に表示される。2026年新APIから必須
    - **アフィリエイトID**: [楽天アフィリエイト](https://affiliate.rakuten.co.jp/) の管理画面に表示（例 `1a2b3c4d.5e6f7a8b`）
    - ※アフィリエイトIDを入れないと報酬が発生するリンクになりません（アプリが警告します）
+   - ※楽天側の「許可されたWebサイト」に `kaneshiro0101-pixel.github.io` の登録が必要
 
 ## 毎日の流れ（1回10分）
 
@@ -40,7 +49,7 @@ cd C:\Users\user\rakuten-room-navi
 npm test
 ```
 
-Node標準の `node --test` で 37テスト。`index.html` 内の `/*CORE_START*/〜/*CORE_END*/` の
+Node標準の `node --test` で 40テスト。`index.html` 内の `/*CORE_START*/〜/*CORE_END*/` の
 純ロジック（`RoomCore`）を抽出して検証します（URL構築 / API応答の正規化 / 報酬スコア計算 /
 投稿文生成 / 冪等マージ / 実績集計 など）。**index.html のコアを直したら必ず `npm test` を通すこと。**
 
@@ -55,8 +64,14 @@ rakuten-room-navi/
 └── test/core.test.js … 自動テスト（37件）
 ```
 
+## 更新の反映方法（開発メモ）
+
+`index.html` を改修したら: `npm test` → `deploy/index.html` へコピー → `git commit` → `git push`。
+GitHub Pagesが自動再ビルドする（詰まったら `gh api repos/kaneshiro0101-pixel/room-navi/pages/builds -X POST`）。
+
 ## 制限・注意
 
-- 楽天APIは約1リクエスト/秒の制限あり。連打すると `too_many_requests` になる（少し待てばOK）
+- 楽天APIは約1リクエスト/秒の制限あり。連打すると429エラーになる（少し待てばOK）
+- 楽天APIは2026年に新仕様へ移行済み（`openapi.rakuten.co.jp`・accessKey必須・登録ドメイン制限）。本アプリは新仕様対応
 - 投稿文の誇大表現（「絶対痩せる」等）は薬機法・景表法NG。テンプレとAIプロンプトはNG表現を避ける設計
 - Netlify等に公開する場合もAPIキーは各端末のlocalStorageに保存される（HTMLには埋め込まれない）

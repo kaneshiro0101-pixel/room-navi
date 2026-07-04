@@ -195,13 +195,16 @@ a{color:#6fb7ff;}
       <label>アプリID（applicationId）※必須</label>
       <input type="text" id="setAppId" placeholder="楽天ウェブサービスで発行した数字のID">
       <div style="height:8px"></div>
+      <label>アクセスキー（accessKey）※必須</label>
+      <input type="text" id="setAccessKey" placeholder="アプリIDと同じ画面に表示されるアクセスキー">
+      <div style="height:8px"></div>
       <label>アフィリエイトID（affiliateId）</label>
       <input type="text" id="setAffId" placeholder="例: 1a2b3c4d.5e6f7a8b">
       <div style="height:10px"></div>
       <button class="primary" style="width:100%" id="btnSaveSettings">保存</button>
       <div id="settingsMsg" style="margin-top:8px"></div>
       <div class="small-note" style="margin-top:8px">
-        取得手順：<a href="https://webservice.rakuten.co.jp/" target="_blank" rel="noopener">楽天ウェブサービス</a>にログイン→「アプリID発行」で無料発行。
+        取得手順：<a href="https://webservice.rakuten.co.jp/" target="_blank" rel="noopener">楽天ウェブサービス</a>にログイン→アプリ作成すると<b>アプリIDとアクセスキーの2つ</b>が表示されます（2026年新API仕様でどちらも必須）。
         アフィリエイトIDは<a href="https://affiliate.rakuten.co.jp/" target="_blank" rel="noopener">楽天アフィリエイト</a>の管理画面に表示されます。
         キーはこの端末のlocalStorageにだけ保存され、外部には送信されません（楽天APIへの検索リクエストを除く）。
       </div>
@@ -262,8 +265,9 @@ a{color:#6fb7ff;}
 /*CORE_START*/
 const RoomCore = (() => {
   'use strict';
-  const SEARCH_ENDPOINT = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601';
-  const RANKING_ENDPOINT = 'https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601';
+  // 2026年新API（旧app.rakuten.co.jpは2026-05-13で新規利用不可）
+  const SEARCH_ENDPOINT = 'https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701';
+  const RANKING_ENDPOINT = 'https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601';
 
   const DEFAULT_HASHTAGS = ['楽天ROOM', '楽天roomに載せてます', '楽天購入品', 'お買い物マラソン', '楽天セール'];
 
@@ -306,9 +310,12 @@ const RoomCore = (() => {
   function baseParams(settings, url) {
     const appId = String((settings && settings.applicationId) || '').trim();
     if (!appId) throw new Error('applicationId が未設定です（設定タブでアプリIDを保存してください）');
+    const accessKey = String((settings && settings.accessKey) || '').trim();
+    if (!accessKey) throw new Error('accessKey（アクセスキー）が未設定です（設定タブで保存してください）');
     url.searchParams.set('format', 'json');
     url.searchParams.set('formatVersion', '2');
     url.searchParams.set('applicationId', appId);
+    url.searchParams.set('accessKey', accessKey);
     const aff = String((settings && settings.affiliateId) || '').trim();
     if (aff) url.searchParams.set('affiliateId', aff);
     return url;
@@ -342,10 +349,12 @@ const RoomCore = (() => {
   }
 
   function parseItems(res) {
-    if (!res || !Array.isArray(res.Items)) return [];
+    // 旧API=Items/Item、新API(openapi)=items/item の両対応
+    const list = res && (Array.isArray(res.Items) ? res.Items : (Array.isArray(res.items) ? res.items : null));
+    if (!list) return [];
     const out = [];
-    for (const raw of res.Items) {
-      const it = raw && raw.Item ? raw.Item : raw;
+    for (const raw of list) {
+      const it = raw && (raw.Item || raw.item) ? (raw.Item || raw.item) : raw;
       if (!it || typeof it !== 'object') continue;
       const imgs = Array.isArray(it.mediumImageUrls) ? it.mediumImageUrls : [];
       const first = imgs[0];
@@ -473,6 +482,9 @@ const RoomCore = (() => {
     if (!String(s.applicationId || '').trim()) {
       errors.push('アプリID（applicationId）が未設定です');
     }
+    if (!String(s.accessKey || '').trim()) {
+      errors.push('アクセスキー（accessKey）が未設定です（2026年の新APIから必須になりました）');
+    }
     const aff = String(s.affiliateId || '').trim();
     if (!aff) {
       warnings.push('アフィリエイトIDが未設定です。設定しないと報酬が発生するリンクになりません');
@@ -536,7 +548,7 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 // ---------- 状態 ----------
 const defaults = () => ({
-  settings: { applicationId: '', affiliateId: '' },
+  settings: { applicationId: '', accessKey: '', affiliateId: '' },
   templates: JSON.parse(JSON.stringify(C.DEFAULT_TEMPLATES)),
   hashtags: [...C.DEFAULT_HASHTAGS],
   stock: [],
@@ -620,33 +632,29 @@ $$('#modeSeg button').forEach(b => b.addEventListener('click', () => {
   $('#sortWrap').style.display = ui.mode === 'search' ? '' : 'none';
 }));
 
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const cb = '__roomNaviCb' + Date.now() + Math.floor(Math.random() * 1000);
-    const s = document.createElement('script');
-    const timer = setTimeout(() => { cleanup(); reject(new Error('通信タイムアウト')); }, 15000);
-    function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
-    window[cb] = (data) => { cleanup(); resolve(data); };
-    s.onerror = () => { cleanup(); reject(new Error('通信エラー（JSONP）')); };
-    s.src = url + '&callback=' + cb;
-    document.head.appendChild(s);
-  });
-}
 async function fetchApi(url) {
-  let data;
+  let r;
   try {
-    const r = await fetch(url);
-    data = await r.json();
+    r = await fetch(url);
   } catch (e) {
-    data = await jsonp(url); // file:// やCORS失敗時のフォールバック
+    // 新APIはOrigin(登録ドメイン)必須のためfile://からは使えない
+    throw new Error('通信できません。この検索はGitHub Pages公開版（https://kaneshiro0101-pixel.github.io/room-navi/）から使ってください');
+  }
+  let data = null;
+  try { data = await r.json(); } catch (e) { /* 本文なし */ }
+  if (!r.ok) {
+    if (r.status === 404) return { items: [] }; // 該当なし
+    const map = {
+      400: 'パラメータが不正です（アプリIDとアクセスキーを確認してください）',
+      401: '認証エラー：アプリIDまたはアクセスキーが違います',
+      403: 'アクセス拒否：楽天の「許可されたWebサイト」にこのドメインが登録されているか確認してください',
+      429: 'リクエストが多すぎます。少し待ってから再実行してください'
+    };
+    const hint = data && (data.error_description || data.message || data.error);
+    throw new Error(map[r.status] || ('APIエラー(' + r.status + ')' + (hint ? ': ' + hint : '')));
   }
   if (data && data.error) {
-    const map = {
-      wrong_parameter: 'パラメータが不正です（アプリIDを確認してください）',
-      not_found: '該当する商品がありません',
-      too_many_requests: 'リクエストが多すぎます。少し待ってから再実行してください'
-    };
-    throw new Error(map[data.error] || (data.error_description || data.error));
+    throw new Error(data.error_description || data.error);
   }
   return data;
 }
@@ -988,6 +996,7 @@ $('#btnAddPerf').addEventListener('click', () => {
 // ---------- 設定 ----------
 function renderSettings() {
   $('#setAppId').value = state.settings.applicationId || '';
+  $('#setAccessKey').value = state.settings.accessKey || '';
   $('#setAffId').value = state.settings.affiliateId || '';
   $('#setTags').value = state.hashtags.join(', ');
   renderTplList();
@@ -1001,6 +1010,7 @@ function renderSettingsMsg(v, showOk) {
 }
 $('#btnSaveSettings').addEventListener('click', () => {
   state.settings.applicationId = $('#setAppId').value.trim();
+  state.settings.accessKey = $('#setAccessKey').value.trim();
   state.settings.affiliateId = $('#setAffId').value.trim();
   save();
   const v = C.validateSettings(state.settings);

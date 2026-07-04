@@ -18,7 +18,7 @@ function loadCore() {
 const Core = loadCore();
 
 // ---- サンプルデータ ----
-const settings = { applicationId: '1000000000000000000', affiliateId: '1a2b3c4d.5e6f7a8b' };
+const settings = { applicationId: '1000000000000000000', accessKey: 'ak_test1234567890', affiliateId: '1a2b3c4d.5e6f7a8b' };
 
 const fv2Item = {
   itemCode: 'shopA:10001',
@@ -66,11 +66,12 @@ const rankingResponse = {
 };
 
 // ---- buildSearchUrl ----
-test('buildSearchUrl: 基本パラメータが入る', () => {
+test('buildSearchUrl: 新API(openapi)の基本パラメータが入る', () => {
   const u = new URL(Core.buildSearchUrl(settings, { keyword: '炭酸水' }));
-  assert.equal(u.origin + u.pathname, 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601');
+  assert.equal(u.origin + u.pathname, 'https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701');
   const p = u.searchParams;
   assert.equal(p.get('applicationId'), settings.applicationId);
+  assert.equal(p.get('accessKey'), settings.accessKey);
   assert.equal(p.get('affiliateId'), settings.affiliateId);
   assert.equal(p.get('keyword'), '炭酸水');
   assert.equal(p.get('format'), 'json');
@@ -86,12 +87,16 @@ test('buildSearchUrl: sort/genreId/page を指定できる', () => {
 });
 
 test('buildSearchUrl: affiliateIdが無ければパラメータ自体を付けない', () => {
-  const p = new URL(Core.buildSearchUrl({ applicationId: 'x' }, { keyword: 'a' })).searchParams;
+  const p = new URL(Core.buildSearchUrl({ applicationId: 'x', accessKey: 'k' }, { keyword: 'a' })).searchParams;
   assert.equal(p.has('affiliateId'), false);
 });
 
 test('buildSearchUrl: applicationId未設定はthrow', () => {
-  assert.throws(() => Core.buildSearchUrl({}, { keyword: 'a' }), /applicationId/);
+  assert.throws(() => Core.buildSearchUrl({ accessKey: 'k' }, { keyword: 'a' }), /applicationId/);
+});
+
+test('buildSearchUrl: accessKey未設定はthrow（2026新API必須）', () => {
+  assert.throws(() => Core.buildSearchUrl({ applicationId: 'x' }, { keyword: 'a' }), /accessKey|アクセスキー/);
 });
 
 test('buildSearchUrl: keywordもgenreIdも無しはthrow', () => {
@@ -99,11 +104,12 @@ test('buildSearchUrl: keywordもgenreIdも無しはthrow', () => {
 });
 
 // ---- buildRankingUrl ----
-test('buildRankingUrl: ランキングAPIのURLになる', () => {
+test('buildRankingUrl: 新API(openapi)のランキングURLになる', () => {
   const u = new URL(Core.buildRankingUrl(settings, { genreId: '100227' }));
-  assert.equal(u.origin + u.pathname, 'https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601');
+  assert.equal(u.origin + u.pathname, 'https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601');
   assert.equal(u.searchParams.get('genreId'), '100227');
   assert.equal(u.searchParams.get('applicationId'), settings.applicationId);
+  assert.equal(u.searchParams.get('accessKey'), settings.accessKey);
 });
 
 test('buildRankingUrl: genreId無し=総合ランキング(パラメータ無し)', () => {
@@ -144,6 +150,17 @@ test('parseItems: ランキングレスポンスは rank を持つ', () => {
   const it = Core.parseItems(rankingResponse)[0];
   assert.equal(it.rank, 1);
   assert.equal(it.id, 'shopC:30003');
+});
+
+test('parseItems: 新APIの小文字キー(items)も読める', () => {
+  const lower2 = { items: [{ itemCode: 'shopD:40004', itemName: '小文字fv2', itemPrice: 500, affiliateRate: 2, itemUrl: 'u', mediumImageUrls: ['https://x/img.jpg?_ex=128x128'], shopName: 's', reviewCount: 1, reviewAverage: 4 }] };
+  const it2 = Core.parseItems(lower2)[0];
+  assert.equal(it2.id, 'shopD:40004');
+  assert.equal(it2.name, '小文字fv2');
+  const lower1 = { items: [{ item: { itemCode: 'shopE:50005', itemName: '小文字fv1', itemPrice: 700, rank: 3 } }] };
+  const it1 = Core.parseItems(lower1)[0];
+  assert.equal(it1.id, 'shopE:50005');
+  assert.equal(it1.rank, 3);
 });
 
 test('parseItems: 空・不正レスポンスは空配列', () => {
@@ -277,13 +294,19 @@ test('mergeStock: 空同士でも壊れない', () => {
 
 // ---- 設定バリデーション ----
 test('validateSettings: applicationId必須', () => {
-  const r = Core.validateSettings({ applicationId: '', affiliateId: '' });
+  const r = Core.validateSettings({ applicationId: '', accessKey: 'k', affiliateId: '' });
   assert.equal(r.ok, false);
   assert.ok(r.errors.length >= 1);
 });
 
+test('validateSettings: accessKey必須（2026新API）', () => {
+  const r = Core.validateSettings({ applicationId: '123', accessKey: '', affiliateId: 'a.b' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /アクセスキー|accessKey/.test(e)));
+});
+
 test('validateSettings: affiliateId無しは警告のみ(okはtrue)', () => {
-  const r = Core.validateSettings({ applicationId: '123', affiliateId: '' });
+  const r = Core.validateSettings({ applicationId: '123', accessKey: 'k', affiliateId: '' });
   assert.equal(r.ok, true);
   assert.ok(r.warnings.length >= 1);
 });
