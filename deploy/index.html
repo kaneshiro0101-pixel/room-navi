@@ -519,6 +519,7 @@ const RoomCore = (() => {
       image: String((item && item.image) || ''),
       shop: String((item && item.shop) || ''),
       url: String((item && (item.affiliateUrl || item.url)) || ''),
+      itemUrl: String((item && item.url) || ''),
       caption: String(caption || ''),
       status: 'draft',
       createdAt: ts,
@@ -791,13 +792,15 @@ function renderCompose() {
         <button class="grow" id="btnStock">💾 ストックへ</button>
       </div>
       <div style="height:8px"></div>
+      <button class="primary" style="width:100%; background:#2f8f46; border-color:#2f8f46" id="btnOpenItem">🛒 商品ページを開く（→「ROOMに投稿」を押す）</button>
+      <div style="height:8px"></div>
       <div class="row">
         <button class="grow" id="btnAiPrompt">🤖 AI用プロンプトをコピー</button>
         <button class="grow" id="btnOpenRoom">🔗 ROOMを開く</button>
       </div>
       <div class="small-note" style="margin-top:8px">
-        使い方：投稿文をコピー → ROOMを開く → 商品を検索して「コレ!」→ コメント欄にペースト。<br>
-        もっと自然な文が欲しい時は「AI用プロンプト」をClaudeやChatGPTに貼ると3案作れます。
+        使い方：①投稿文をコピー → ②商品ページを開く → ③ページ内の「ROOMに投稿」ボタン → ④コメント欄にペースト。<br>
+        ROOM内で商品を探す必要はありません。もっと自然な文が欲しい時は「AI用プロンプト」をClaudeに貼ると3案作れます。
       </div>
     </div>`;
   const txt = $('#cmpText');
@@ -830,6 +833,7 @@ function renderCompose() {
     const tpl = state.templates[Number($('#cmpTpl').value)] || state.templates[0];
     copyText(C.buildAiPrompt(it, tpl.name), 'AI用プロンプトをコピーしました');
   });
+  $('#btnOpenItem').addEventListener('click', () => window.open(it.url, '_blank'));
   $('#btnOpenRoom').addEventListener('click', () => window.open('https://room.rakuten.co.jp/', '_blank'));
 }
 
@@ -857,7 +861,7 @@ function renderStock() {
       <div class="row">
         <button class="small primary" data-act="copy">📋 コピー</button>
         <button class="small" data-act="toggle">${e.status === 'posted' ? '↩️ 下書きに戻す' : '✅ 投稿済みに'}</button>
-        <button class="small" data-act="open">商品ページ</button>
+        <button class="small" data-act="open">🛒 商品ページ→ROOM投稿</button>
         <button class="small danger" data-act="del">削除</button>
       </div>
     </div>`).join('')
@@ -868,7 +872,7 @@ function renderStock() {
     if (!e) return;
     const act = b.dataset.act;
     if (act === 'copy') copyText(e.caption, '投稿文をコピーしました');
-    if (act === 'open') window.open(e.url, '_blank');
+    if (act === 'open') window.open(e.itemUrl || e.url, '_blank');
     if (act === 'toggle') {
       if (e.status === 'posted') { e.status = 'draft'; delete e.postedAt; }
       else { e.status = 'posted'; e.postedAt = new Date().toISOString(); }

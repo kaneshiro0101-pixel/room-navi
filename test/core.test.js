@@ -351,6 +351,7 @@ test('makeStockEntry: 商品+投稿文からdraftを作る', () => {
   assert.equal(e.createdAt, now);
   assert.equal(e.updatedAt, now);
   assert.equal(e.url, item.affiliateUrl); // アフィリURL優先
+  assert.equal(e.itemUrl, item.url); // ROOM投稿用に素の商品ページURLも保持
   assert.equal(e.name, item.name);
 });
 
