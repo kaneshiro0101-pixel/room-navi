@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#bf0000">
+<title>ROOMナビ｜楽天ROOMアフィリ支援</title>
+<style>
+:root{
+  --bg:#121417; --card:#1c2027; --card2:#232833; --line:#2e3440;
+  --text:#e8e8ea; --sub:#9aa1ad; --accent:#ff5a5f; --rakuten:#bf0000;
+  --ok:#4cd07d; --warn:#ffb74d; --bad:#ff6b6b;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;
+  font-size:15px; line-height:1.6;}
+#app{max-width:640px; margin:0 auto; padding:0 12px 84px;}
+header{position:sticky; top:0; z-index:10; background:linear-gradient(135deg,#bf0000,#8f0000);
+  margin:0 -12px 12px; padding:12px 16px; display:flex; align-items:center; gap:8px;}
+header h1{font-size:17px; margin:0; font-weight:700; letter-spacing:.02em;}
+header .sub{font-size:11px; opacity:.85;}
+h2{font-size:15px; margin:18px 0 8px; color:var(--text);}
+.card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px;}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.grow{flex:1; min-width:0;}
+label{font-size:12px; color:var(--sub); display:block; margin-bottom:3px;}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  width:100%; background:var(--card2); color:var(--text); border:1px solid var(--line);
+  border-radius:10px; padding:10px 12px; font-size:15px; outline:none;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+textarea{resize:vertical; min-height:90px; line-height:1.6;}
+button{background:var(--card2); color:var(--text); border:1px solid var(--line);
+  border-radius:10px; padding:10px 14px; font-size:14px; cursor:pointer; min-height:44px;}
+button:active{transform:scale(.97);}
+button.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700;}
+button.ghost{background:transparent;}
+button.small{min-height:34px; padding:6px 10px; font-size:12.5px; border-radius:8px;}
+button.danger{color:var(--bad); border-color:#5a2a2a;}
+.seg{display:flex; background:var(--card2); border-radius:10px; padding:3px; gap:3px;}
+.seg button{flex:1; border:none; background:transparent; min-height:38px; border-radius:8px; color:var(--sub);}
+.seg button.on{background:var(--accent); color:#fff; font-weight:700;}
+.chip{display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--sub);}
+.chip.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+.chip.draft{color:var(--warn); border-color:#5a4520;}
+.chip.posted{color:var(--ok); border-color:#245a38;}
+.muted{color:var(--sub); font-size:12.5px;}
+.small-note{color:var(--sub); font-size:11.5px; line-height:1.5;}
+.err{color:var(--bad); font-size:12.5px;}
+.warn{color:var(--warn); font-size:12.5px;}
+.item-card{display:flex; gap:10px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:10px;}
+.item-card img{width:72px; height:72px; object-fit:cover; border-radius:8px; background:var(--card2); flex-shrink:0;}
+.item-name{font-size:13px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.item-meta{font-size:12px; color:var(--sub); margin-top:2px;}
+.price{color:var(--text); font-weight:700; font-size:14px;}
+.badge{display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:6px; margin-right:4px;}
+.badge.rate{background:#3a2530; color:#ff8fa3;}
+.badge.score{background:#20343f; color:#6fd3ff;}
+.badge.rank{background:#3f3620; color:#ffd76f;}
+.badge.comm{background:#22392b; color:#7fe0a4;}
+#tabbar{position:fixed; bottom:0; left:0; right:0; z-index:20;
+  background:#181b21ee; backdrop-filter:blur(8px); border-top:1px solid var(--line);
+  display:flex; padding:4px 4px calc(4px + env(safe-area-inset-bottom));}
+#tabbar button{flex:1; border:none; background:transparent; color:var(--sub);
+  font-size:10.5px; min-height:52px; display:flex; flex-direction:column; align-items:center; gap:2px; border-radius:10px;}
+#tabbar button .ico{font-size:19px; line-height:1;}
+#tabbar button.on{color:var(--accent); font-weight:700;}
+.tab{display:none;}
+.tab.on{display:block;}
+#toast{position:fixed; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px);
+  background:#000c; color:#fff; padding:9px 18px; border-radius:99px; font-size:13px;
+  opacity:0; pointer-events:none; transition:.25s; z-index:99; white-space:nowrap;}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+.stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.stat{background:var(--card2); border-radius:10px; padding:10px 8px; text-align:center;}
+.stat .v{font-size:18px; font-weight:700;}
+.stat .k{font-size:10.5px; color:var(--sub);}
+.bars{display:flex; align-items:flex-end; gap:3px; height:90px; padding-top:8px;}
+.bars .bar{flex:1; background:linear-gradient(180deg,var(--accent),#c23a4a); border-radius:3px 3px 0 0; min-height:2px; position:relative;}
+.bars .bar span{position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:9px; color:var(--sub);}
+.bar-labels{display:flex; gap:3px;}
+.bar-labels div{flex:1; text-align:center; font-size:9px; color:var(--sub);}
+.caption-pre{white-space:pre-wrap; font-size:12.5px; color:var(--sub); max-height:72px; overflow:hidden; margin:6px 0;}
+.tpl-block{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; background:var(--card2);}
+a{color:#6fb7ff;}
+.spin{display:inline-block; width:16px; height:16px; border:2px solid var(--sub); border-top-color:var(--accent); border-radius:50%; animation:sp 1s linear infinite; vertical-align:-3px;}
+@keyframes sp{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>🛍️ ROOMナビ</h1>
+      <div class="sub">楽天ROOMアフィリ支援 — リサーチ→投稿文→ストック→実績</div>
+    </div>
+  </header>
+
+  <!-- ①リサーチ -->
+  <div class="tab" id="tab-research">
+    <div class="card">
+      <div class="seg" id="modeSeg">
+        <button data-mode="search" class="on">🔍 キーワード検索</button>
+        <button data-mode="ranking">👑 ランキング</button>
+      </div>
+      <div style="height:10px"></div>
+      <div id="kwRow">
+        <label>キーワード</label>
+        <input type="text" id="kw" placeholder="例: 炭酸水 ラベルレス / 収納 / 韓国コスメ" enterkeyhint="search">
+        <div style="height:8px"></div>
+      </div>
+      <div class="row">
+        <div class="grow">
+          <label>ジャンル</label>
+          <select id="genre"></select>
+        </div>
+        <div class="grow" id="sortWrap">
+          <label>並び順</label>
+          <select id="sort">
+            <option value="score">スコア順（おすすめ）</option>
+            <option value="-affiliateRate">報酬率が高い順</option>
+            <option value="-reviewCount">レビューが多い順</option>
+            <option value="-itemPrice">価格が高い順</option>
+            <option value="+itemPrice">価格が安い順</option>
+            <option value="standard">楽天標準</option>
+          </select>
+        </div>
+      </div>
+      <div style="height:10px"></div>
+      <button class="primary" style="width:100%" id="btnSearch">商品をさがす</button>
+      <div class="small-note" style="margin-top:8px">
+        スコア＝1件あたり報酬(円)×売れ筋度(レビュー数・評価)×売れやすい価格帯(1,000〜9,999円)ボーナス。
+        「載せれば売れやすくて報酬も取れる」順に並びます。
+      </div>
+    </div>
+    <div id="searchStatus"></div>
+    <div id="results"></div>
+    <div id="pager"></div>
+  </div>
+
+  <!-- ②投稿文 -->
+  <div class="tab" id="tab-compose">
+    <div id="composeBody"></div>
+  </div>
+
+  <!-- ③ストック -->
+  <div class="tab" id="tab-stock">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row" id="stockFilter">
+          <span class="chip on" data-f="all">すべて</span>
+          <span class="chip" data-f="draft">下書き</span>
+          <span class="chip" data-f="posted">投稿済み</span>
+        </div>
+        <span class="muted" id="todayCount"></span>
+      </div>
+    </div>
+    <div id="stockList"></div>
+    <div class="card">
+      <div class="row">
+        <button class="grow" id="btnExport">⬇️ バックアップ書き出し</button>
+        <button class="grow" id="btnImport">⬆️ 取り込み(冪等)</button>
+        <input type="file" id="importFile" accept=".json" style="display:none">
+      </div>
+      <div class="small-note" style="margin-top:6px">同じデータを何度取り込んでも重複しません（idと更新日時でマージ）。</div>
+    </div>
+  </div>
+
+  <!-- ④実績 -->
+  <div class="tab" id="tab-perf">
+    <div class="card">
+      <h2 style="margin-top:0">実績を記録</h2>
+      <div class="row">
+        <div class="grow"><label>日付</label><input type="date" id="pfDate"></div>
+        <div class="grow"><label>クリック</label><input type="number" id="pfClicks" min="0" placeholder="0"></div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <div class="grow"><label>成果件数</label><input type="number" id="pfOrders" min="0" placeholder="0"></div>
+        <div class="grow"><label>報酬(円)</label><input type="number" id="pfReward" min="0" placeholder="0"></div>
+      </div>
+      <div style="height:10px"></div>
+      <button class="primary" style="width:100%" id="btnAddPerf">この日の実績を保存（同日付は上書き）</button>
+      <div class="small-note" style="margin-top:6px">数字は楽天アフィリエイトの成果レポート（アプリ/Web）から転記してください。</div>
+    </div>
+    <div id="perfSummary"></div>
+    <div id="perfChart"></div>
+    <div id="perfList"></div>
+  </div>
+
+  <!-- ⑤設定 -->
+  <div class="tab" id="tab-settings">
+    <div class="card">
+      <h2 style="margin-top:0">楽天APIキー</h2>
+      <label>アプリID（applicationId）※必須</label>
+      <input type="text" id="setAppId" placeholder="楽天ウェブサービスで発行した数字のID">
+      <div style="height:8px"></div>
+      <label>アフィリエイトID（affiliateId）</label>
+      <input type="text" id="setAffId" placeholder="例: 1a2b3c4d.5e6f7a8b">
+      <div style="height:10px"></div>
+      <button class="primary" style="width:100%" id="btnSaveSettings">保存</button>
+      <div id="settingsMsg" style="margin-top:8px"></div>
+      <div class="small-note" style="margin-top:8px">
+        取得手順：<a href="https://webservice.rakuten.co.jp/" target="_blank" rel="noopener">楽天ウェブサービス</a>にログイン→「アプリID発行」で無料発行。
+        アフィリエイトIDは<a href="https://affiliate.rakuten.co.jp/" target="_blank" rel="noopener">楽天アフィリエイト</a>の管理画面に表示されます。
+        キーはこの端末のlocalStorageにだけ保存され、外部には送信されません（楽天APIへの検索リクエストを除く）。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">基本ハッシュタグ</h2>
+      <textarea id="setTags" rows="2" placeholder="カンマか改行区切り"></textarea>
+      <div style="height:8px"></div>
+      <button style="width:100%" id="btnSaveTags">ハッシュタグを保存</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">投稿文テンプレート</h2>
+      <div class="small-note" style="margin-bottom:8px">
+        使える差し込み: {name}=商品名(40字) {price}=価格 {rate}=料率% {shop}=店名 {point}=ひとこと訴求 {tags}=ハッシュタグ
+      </div>
+      <div id="tplList"></div>
+      <div class="row">
+        <button class="grow" id="btnAddTpl">＋テンプレ追加</button>
+        <button class="grow" id="btnResetTpl">初期テンプレに戻す</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">データ</h2>
+      <div class="row">
+        <button class="grow" id="btnExport2">⬇️ 全データ書き出し</button>
+        <button class="grow" id="btnImport2">⬆️ 取り込み(冪等)</button>
+      </div>
+      <div style="height:8px"></div>
+      <button class="danger" style="width:100%" id="btnWipe">全データ初期化</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">⚠️ このアプリの方針</h2>
+      <div class="small-note">
+        楽天ROOMには公開の投稿APIがなく、自動投稿ボットは利用規約違反（最悪アカウント停止＝収益ゼロ）です。
+        そのためこのアプリは「投稿ボタンを押す直前まで」を自動化します。
+        商品選び・投稿文・ハッシュタグはここで自動生成し、ROOMアプリでは「コレ!」→コメント欄にペーストするだけ。
+        1日3〜5投稿をストックから消化するのが目安です。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<div id="tabbar">
+  <button data-tab="research" class="on"><span class="ico">🔍</span>リサーチ</button>
+  <button data-tab="compose"><span class="ico">✍️</span>投稿文</button>
+  <button data-tab="stock"><span class="ico">📦</span>ストック</button>
+  <button data-tab="perf"><span class="ico">📈</span>実績</button>
+  <button data-tab="settings"><span class="ico">⚙️</span>設定</button>
+</div>
+
+<script>
+/*CORE_START*/
+const RoomCore = (() => {
+  'use strict';
+  const SEARCH_ENDPOINT = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601';
+  const RANKING_ENDPOINT = 'https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601';
+
+  const DEFAULT_HASHTAGS = ['楽天ROOM', '楽天roomに載せてます', '楽天購入品', 'お買い物マラソン', '楽天セール'];
+
+  const DEFAULT_TEMPLATES = [
+    { id: 'nayami', name: '悩み解決', body:
+      '＼{point}／\n\n{name}\n\n▶ {price}円\n\nこういうのでいいんだよ、が見つかった◎\nレビュー評価も高くてリピーター多めの人気商品です。\n\n{tags}' },
+    { id: 'review', name: '愛用レビュー風', body:
+      'これ、正直もっと早く買えばよかった…！\n\n{name}\n\n▶ {price}円\n\n{point}\n使ってみた感想は「戻れない」の一言。\n気になってる人は覗いてみてください👇\n\n{tags}' },
+    { id: 'hikaku', name: '比較・選び方', body:
+      '【{point}】\n\n似た商品を散々比較して、最終的にこれにしました。\n\n{name}\n\n▶ {price}円\n\n決め手はレビューの多さと価格のバランス。\n迷ってる人の参考になれば◎\n\n{tags}' },
+    { id: 'season', name: '季節・イベント', body:
+      '{point}はこれで決まり🎉\n\n{name}\n\n▶ {price}円\n\n毎年この時期は売り切れがちなので、早めのチェックがおすすめです。\n\n{tags}' }
+  ];
+
+  const GENRES = [
+    ['', 'ジャンル指定なし（総合）'],
+    ['100371', 'レディースファッション'],
+    ['551177', 'メンズファッション'],
+    ['100433', 'インナー・下着'],
+    ['216131', 'バッグ・小物'],
+    ['558885', '靴'],
+    ['216129', 'ジュエリー・アクセサリー'],
+    ['100533', 'キッズ・ベビー'],
+    ['566382', 'おもちゃ'],
+    ['101070', 'スポーツ・アウトドア'],
+    ['562637', '家電'],
+    ['100227', '食品'],
+    ['551167', 'スイーツ・お菓子'],
+    ['100316', '水・ソフトドリンク'],
+    ['100804', 'インテリア・寝具・収納'],
+    ['215783', '日用品雑貨・文房具'],
+    ['558944', 'キッチン用品・食器'],
+    ['100939', '美容・コスメ・香水'],
+    ['100938', 'ダイエット・健康'],
+    ['101213', 'ペット用品'],
+    ['100005', '花・ガーデン・DIY'],
+    ['200162', '本・雑誌・コミック']
+  ];
+
+  function baseParams(settings, url) {
+    const appId = String((settings && settings.applicationId) || '').trim();
+    if (!appId) throw new Error('applicationId が未設定です（設定タブでアプリIDを保存してください）');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('formatVersion', '2');
+    url.searchParams.set('applicationId', appId);
+    const aff = String((settings && settings.affiliateId) || '').trim();
+    if (aff) url.searchParams.set('affiliateId', aff);
+    return url;
+  }
+
+  function buildSearchUrl(settings, opts) {
+    opts = opts || {};
+    const kw = String(opts.keyword || '').trim();
+    const genre = String(opts.genreId || '').trim();
+    if (!kw && !genre) throw new Error('keyword か genreId のどちらかが必要です');
+    const url = baseParams(settings, new URL(SEARCH_ENDPOINT));
+    url.searchParams.set('hits', String(opts.hits || 30));
+    url.searchParams.set('page', String(opts.page || 1));
+    if (kw) url.searchParams.set('keyword', kw);
+    if (genre) url.searchParams.set('genreId', genre);
+    if (opts.sort && opts.sort !== 'score') url.searchParams.set('sort', opts.sort);
+    return url.toString();
+  }
+
+  function buildRankingUrl(settings, opts) {
+    opts = opts || {};
+    const url = baseParams(settings, new URL(RANKING_ENDPOINT));
+    const genre = String(opts.genreId || '').trim();
+    if (genre) url.searchParams.set('genreId', genre);
+    if (opts.page) url.searchParams.set('page', String(opts.page));
+    return url.toString();
+  }
+
+  function upsizeImage(u) {
+    return String(u || '').replace(/_ex=\d+x\d+/, '_ex=300x300');
+  }
+
+  function parseItems(res) {
+    if (!res || !Array.isArray(res.Items)) return [];
+    const out = [];
+    for (const raw of res.Items) {
+      const it = raw && raw.Item ? raw.Item : raw;
+      if (!it || typeof it !== 'object') continue;
+      const imgs = Array.isArray(it.mediumImageUrls) ? it.mediumImageUrls : [];
+      const first = imgs[0];
+      const img = typeof first === 'string' ? first : (first && first.imageUrl) || '';
+      out.push({
+        id: String(it.itemCode || ''),
+        name: String(it.itemName || ''),
+        price: Number(it.itemPrice) || 0,
+        rate: Number(it.affiliateRate) || 0,
+        url: String(it.itemUrl || ''),
+        affiliateUrl: String(it.affiliateUrl || ''),
+        image: upsizeImage(img),
+        shop: String(it.shopName || ''),
+        reviewCount: Number(it.reviewCount) || 0,
+        reviewAverage: Number(it.reviewAverage) || 0,
+        genreId: String(it.genreId || ''),
+        rank: it.rank != null ? Number(it.rank) : null
+      });
+    }
+    return out;
+  }
+
+  function expectedCommission(item) {
+    const price = Number(item && item.price) || 0;
+    const rate = Number(item && item.rate) || 0;
+    return Math.floor(price * rate / 100);
+  }
+
+  function priceBandBonus(price) {
+    const p = Number(price) || 0;
+    return (p >= 1000 && p <= 9999) ? 1.2 : 1;
+  }
+
+  function calcScore(item) {
+    if (!item) return 0;
+    const c = expectedCommission(item);
+    const demand = Math.log10((Number(item.reviewCount) || 0) + 1);
+    const avg = Number(item.reviewAverage) || 0;
+    const quality = avg > 0 ? avg / 5 : 0.6;
+    const s = c * demand * quality * priceBandBonus(item.price);
+    return Math.round(s * 10) / 10;
+  }
+
+  function shortenName(name, max) {
+    const s = String(name || '');
+    const m = max || 40;
+    if (s.length <= m) return s;
+    return s.slice(0, m - 1) + '…';
+  }
+
+  function formatPrice(n) {
+    const v = Math.round(Number(n) || 0);
+    return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function buildHashtags(list) {
+    const seen = new Set();
+    const out = [];
+    for (const t of (list || [])) {
+      const s = String(t || '').trim();
+      if (!s) continue;
+      const tag = s.startsWith('#') ? s : '#' + s;
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      out.push(tag);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+
+  function generateCaption(item, template, opts) {
+    opts = opts || {};
+    const tags = buildHashtags(opts.tags || []);
+    const map = {
+      name: shortenName(item && item.name, 40),
+      price: formatPrice(item && item.price),
+      rate: String((item && item.rate) != null ? item.rate : ''),
+      shop: String((item && item.shop) || ''),
+      point: String(opts.point || ''),
+      tags: tags.join(' '),
+      url: String((item && (item.affiliateUrl || item.url)) || '')
+    };
+    const text = String(template || '')
+      .replace(/\{(name|price|rate|shop|point|tags|url)\}/g, (_, k) => map[k] != null ? map[k] : '');
+    return { text, length: text.length, ok: text.length > 0 && text.length <= 1000 };
+  }
+
+  function buildAiPrompt(item, angle) {
+    return [
+      'あなたは楽天ROOMで人気のインフルエンサーです。以下の商品について、楽天ROOMの「コレ!」に付けるオリジナルコメントを3案書いてください。',
+      '',
+      '【商品情報】',
+      '・商品名: ' + String((item && item.name) || ''),
+      '・価格: ' + formatPrice(item && item.price) + '円',
+      '・アフィリエイト料率: ' + ((item && item.rate) || 0) + '%',
+      '・ショップ: ' + String((item && item.shop) || ''),
+      '・レビュー: ' + ((item && item.reviewCount) || 0) + '件 / 平均' + ((item && item.reviewAverage) || 0),
+      '',
+      '【条件】',
+      '・切り口: ' + String(angle || 'おまかせ'),
+      '・各案130〜250文字、絵文字は2〜4個まで',
+      '・「絶対」「必ず◯◯できる」等の断定・誇大表現、効果効能の言い切り（薬機法・景表法NG）は使わない',
+      '・実体験風でも個人の感想と分かる書き方にする',
+      '・各案の最後にハッシュタグ5個（#楽天ROOM を含める）'
+    ].join('\n');
+  }
+
+  function mergeStock(existing, incoming) {
+    const map = new Map();
+    for (const e of (existing || [])) {
+      if (e && e.id) map.set(e.id, e);
+    }
+    for (const e of (incoming || [])) {
+      if (!e || !e.id) continue;
+      const cur = map.get(e.id);
+      if (!cur || String(e.updatedAt || '') > String(cur.updatedAt || '')) map.set(e.id, e);
+    }
+    return Array.from(map.values());
+  }
+
+  function validateSettings(s) {
+    s = s || {};
+    const errors = [];
+    const warnings = [];
+    if (!String(s.applicationId || '').trim()) {
+      errors.push('アプリID（applicationId）が未設定です');
+    }
+    const aff = String(s.affiliateId || '').trim();
+    if (!aff) {
+      warnings.push('アフィリエイトIDが未設定です。設定しないと報酬が発生するリンクになりません');
+    } else if (!aff.includes('.')) {
+      warnings.push('アフィリエイトIDの形式が通常と異なります（例: 1a2b3c4d.5e6f7a8b）');
+    }
+    return { ok: errors.length === 0, errors, warnings };
+  }
+
+  function summarizePerformance(entries) {
+    const s = { totalClicks: 0, totalOrders: 0, totalReward: 0, byMonth: {} };
+    for (const e of (entries || [])) {
+      if (!e || !e.date) continue;
+      const c = Number(e.clicks) || 0;
+      const o = Number(e.orders) || 0;
+      const r = Number(e.reward) || 0;
+      s.totalClicks += c; s.totalOrders += o; s.totalReward += r;
+      const m = String(e.date).slice(0, 7);
+      const b = s.byMonth[m] || (s.byMonth[m] = { clicks: 0, orders: 0, reward: 0 });
+      b.clicks += c; b.orders += o; b.reward += r;
+    }
+    return s;
+  }
+
+  function makeStockEntry(item, caption, now) {
+    const ts = now || new Date().toISOString();
+    return {
+      id: String((item && item.id) || ''),
+      name: String((item && item.name) || ''),
+      price: Number(item && item.price) || 0,
+      rate: Number(item && item.rate) || 0,
+      image: String((item && item.image) || ''),
+      shop: String((item && item.shop) || ''),
+      url: String((item && (item.affiliateUrl || item.url)) || ''),
+      caption: String(caption || ''),
+      status: 'draft',
+      createdAt: ts,
+      updatedAt: ts
+    };
+  }
+
+  return {
+    SEARCH_ENDPOINT, RANKING_ENDPOINT, DEFAULT_HASHTAGS, DEFAULT_TEMPLATES, GENRES,
+    buildSearchUrl, buildRankingUrl, parseItems,
+    expectedCommission, priceBandBonus, calcScore,
+    shortenName, formatPrice, buildHashtags, generateCaption, buildAiPrompt,
+    mergeStock, validateSettings, summarizePerformance, makeStockEntry
+  };
+})();
+if (typeof window !== 'undefined') window.RoomCore = RoomCore;
+/*CORE_END*/
+</script>
+
+<script>
+(() => {
+'use strict';
+const C = RoomCore;
+const DB_KEY = 'roomNavi_v1';
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+// ---------- 状態 ----------
+const defaults = () => ({
+  settings: { applicationId: '', affiliateId: '' },
+  templates: JSON.parse(JSON.stringify(C.DEFAULT_TEMPLATES)),
+  hashtags: [...C.DEFAULT_HASHTAGS],
+  stock: [],
+  performance: []
+});
+let state = load();
+let ui = {
+  mode: 'search', page: 1, lastQuery: null, results: [], resultCount: 0,
+  selected: null, stockFilter: 'all', composeCaption: ''
+};
+
+function load() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (!raw) return defaults();
+    const d = defaults();
+    const j = JSON.parse(raw);
+    return {
+      settings: Object.assign(d.settings, j.settings || {}),
+      templates: Array.isArray(j.templates) && j.templates.length ? j.templates : d.templates,
+      hashtags: Array.isArray(j.hashtags) && j.hashtags.length ? j.hashtags : d.hashtags,
+      stock: Array.isArray(j.stock) ? j.stock : [],
+      performance: Array.isArray(j.performance) ? j.performance : []
+    };
+  } catch (e) { return defaults(); }
+}
+function save() { localStorage.setItem(DB_KEY, JSON.stringify(state)); }
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+async function copyText(text, doneMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(doneMsg || 'コピーしました');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(doneMsg || 'コピーしました'); }
+    catch (e2) { toast('コピーできませんでした'); }
+    ta.remove();
+  }
+}
+function today() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// ---------- タブ ----------
+function showTab(name) {
+  $$('.tab').forEach(el => el.classList.toggle('on', el.id === 'tab-' + name));
+  $$('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  if (name === 'compose') renderCompose();
+  if (name === 'stock') renderStock();
+  if (name === 'perf') renderPerf();
+  if (name === 'settings') renderSettings();
+  window.scrollTo(0, 0);
+}
+$$('#tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ---------- リサーチ ----------
+const genreSel = $('#genre');
+C.GENRES.forEach(([v, label]) => {
+  const o = document.createElement('option');
+  o.value = v; o.textContent = label;
+  genreSel.appendChild(o);
+});
+
+$$('#modeSeg button').forEach(b => b.addEventListener('click', () => {
+  ui.mode = b.dataset.mode;
+  $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+  $('#kwRow').style.display = ui.mode === 'search' ? '' : 'none';
+  $('#sortWrap').style.display = ui.mode === 'search' ? '' : 'none';
+}));
+
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const cb = '__roomNaviCb' + Date.now() + Math.floor(Math.random() * 1000);
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('通信タイムアウト')); }, 15000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error('通信エラー（JSONP）')); };
+    s.src = url + '&callback=' + cb;
+    document.head.appendChild(s);
+  });
+}
+async function fetchApi(url) {
+  let data;
+  try {
+    const r = await fetch(url);
+    data = await r.json();
+  } catch (e) {
+    data = await jsonp(url); // file:// やCORS失敗時のフォールバック
+  }
+  if (data && data.error) {
+    const map = {
+      wrong_parameter: 'パラメータが不正です（アプリIDを確認してください）',
+      not_found: '該当する商品がありません',
+      too_many_requests: 'リクエストが多すぎます。少し待ってから再実行してください'
+    };
+    throw new Error(map[data.error] || (data.error_description || data.error));
+  }
+  return data;
+}
+
+async function doSearch(page) {
+  const v = C.validateSettings(state.settings);
+  if (!v.ok) {
+    $('#searchStatus').innerHTML = '<div class="card err">' + esc(v.errors[0]) + '</div>';
+    showTabHint();
+    return;
+  }
+  ui.page = page || 1;
+  const opts = {
+    keyword: $('#kw').value,
+    genreId: genreSel.value,
+    sort: $('#sort').value,
+    page: ui.page
+  };
+  let url;
+  try {
+    url = ui.mode === 'ranking'
+      ? C.buildRankingUrl(state.settings, { genreId: opts.genreId, page: ui.page })
+      : C.buildSearchUrl(state.settings, opts);
+  } catch (e) {
+    $('#searchStatus').innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
+    return;
+  }
+  $('#searchStatus').innerHTML = '<div class="card muted"><span class="spin"></span> 検索中…</div>';
+  $('#results').innerHTML = ''; $('#pager').innerHTML = '';
+  try {
+    const data = await fetchApi(url);
+    let items = C.parseItems(data);
+    items.forEach(it => { it.score = C.calcScore(it); it.commission = C.expectedCommission(it); });
+    if (ui.mode === 'search' && opts.sort === 'score') items.sort((a, b) => b.score - a.score);
+    ui.results = items;
+    ui.resultCount = Number(data && data.count) || items.length;
+    ui.lastQuery = opts;
+    renderResults();
+  } catch (e) {
+    $('#searchStatus').innerHTML = '<div class="card err">検索に失敗: ' + esc(e.message) + '</div>';
+  }
+}
+function showTabHint() {
+  setTimeout(() => showTab('settings'), 600);
+}
+
+function renderResults() {
+  const items = ui.results;
+  $('#searchStatus').innerHTML = items.length
+    ? '<div class="muted" style="margin:4px 2px 8px">' + items.length + '件表示' +
+      (ui.mode === 'search' ? '（全' + ui.resultCount.toLocaleString() + '件）' : '') + '</div>'
+    : '<div class="card muted">商品が見つかりませんでした。キーワードやジャンルを変えてみてください。</div>';
+  $('#results').innerHTML = items.map((it, i) => `
+    <div class="item-card">
+      ${it.image ? `<img src="${esc(it.image)}" alt="" loading="lazy">` : '<img alt="">'}
+      <div class="grow">
+        <div style="margin-bottom:3px">
+          ${it.rank ? `<span class="badge rank">${it.rank}位</span>` : ''}
+          <span class="badge rate">料率${esc(it.rate)}%</span>
+          <span class="badge comm">報酬${esc(C.formatPrice(it.commission))}円/件</span>
+          ${it.score ? `<span class="badge score">スコア${esc(C.formatPrice(Math.round(it.score)))}</span>` : ''}
+        </div>
+        <div class="item-name">${esc(it.name)}</div>
+        <div class="item-meta">
+          <span class="price">${esc(C.formatPrice(it.price))}円</span>
+          ／★${esc(it.reviewAverage || '-')}（${esc(C.formatPrice(it.reviewCount))}件）
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button class="small primary" data-compose="${i}">✍️ 投稿文を作る</button>
+          <button class="small" data-open="${i}">商品ページ</button>
+        </div>
+      </div>
+    </div>`).join('');
+  $$('#results [data-compose]').forEach(b => b.addEventListener('click', () => {
+    ui.selected = ui.results[Number(b.dataset.compose)];
+    ui.composeCaption = '';
+    showTab('compose');
+  }));
+  $$('#results [data-open]').forEach(b => b.addEventListener('click', () => {
+    const it = ui.results[Number(b.dataset.open)];
+    window.open(it.url, '_blank');
+  }));
+  if (ui.mode === 'search' && ui.resultCount > ui.page * 30) {
+    $('#pager').innerHTML = '<button style="width:100%" id="btnMore">次の30件 ›</button>';
+    $('#btnMore').addEventListener('click', () => doSearch(ui.page + 1));
+  } else {
+    $('#pager').innerHTML = '';
+  }
+}
+$('#btnSearch').addEventListener('click', () => doSearch(1));
+$('#kw').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(1); });
+
+// ---------- 投稿文 ----------
+function renderCompose() {
+  const box = $('#composeBody');
+  const it = ui.selected;
+  if (!it) {
+    box.innerHTML = `<div class="card muted">
+      まだ商品が選ばれていません。<br>
+      「🔍リサーチ」タブで商品を探して「✍️投稿文を作る」を押してください。<br><br>
+      <button class="primary" id="goResearch">リサーチへ</button></div>`;
+    $('#goResearch').addEventListener('click', () => showTab('research'));
+    return;
+  }
+  const tplOptions = state.templates.map((t, i) =>
+    `<option value="${i}">${esc(t.name)}</option>`).join('');
+  box.innerHTML = `
+    <div class="item-card">
+      ${it.image ? `<img src="${esc(it.image)}" alt="">` : '<img alt="">'}
+      <div class="grow">
+        <div class="item-name">${esc(it.name)}</div>
+        <div class="item-meta"><span class="price">${esc(C.formatPrice(it.price))}円</span>
+        ／料率${esc(it.rate)}%＝報酬${esc(C.formatPrice(C.expectedCommission(it)))}円/件</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label>テンプレート</label>
+          <select id="cmpTpl">${tplOptions}</select>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+      <label>ひとこと訴求（{point} に入る）</label>
+      <input type="text" id="cmpPoint" placeholder="例: 送料無料でこの値段 / 母の日ギフト">
+      <div style="height:10px"></div>
+      <button class="primary" style="width:100%" id="btnGen">投稿文を生成</button>
+      <div style="height:10px"></div>
+      <label>投稿文（編集OK）<span id="cmpCount" class="muted"></span></label>
+      <textarea id="cmpText" rows="9"></textarea>
+      <div style="height:10px"></div>
+      <div class="row">
+        <button class="grow primary" id="btnCopyCap">📋 投稿文をコピー</button>
+        <button class="grow" id="btnStock">💾 ストックへ</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button class="grow" id="btnAiPrompt">🤖 AI用プロンプトをコピー</button>
+        <button class="grow" id="btnOpenRoom">🔗 ROOMを開く</button>
+      </div>
+      <div class="small-note" style="margin-top:8px">
+        使い方：投稿文をコピー → ROOMを開く → 商品を検索して「コレ!」→ コメント欄にペースト。<br>
+        もっと自然な文が欲しい時は「AI用プロンプト」をClaudeやChatGPTに貼ると3案作れます。
+      </div>
+    </div>`;
+  const txt = $('#cmpText');
+  const updateCount = () => {
+    const n = txt.value.length;
+    $('#cmpCount').textContent = ` ${n}/1000字` + (n > 1000 ? ' ⚠️超過' : '');
+    $('#cmpCount').className = n > 1000 ? 'err' : 'muted';
+  };
+  txt.value = ui.composeCaption || '';
+  updateCount();
+  txt.addEventListener('input', () => { ui.composeCaption = txt.value; updateCount(); });
+  $('#btnGen').addEventListener('click', () => {
+    const tpl = state.templates[Number($('#cmpTpl').value)] || state.templates[0];
+    const r = C.generateCaption(it, tpl.body, { point: $('#cmpPoint').value, tags: state.hashtags });
+    txt.value = r.text; ui.composeCaption = r.text; updateCount();
+    if (!r.ok) toast('⚠️ 1000字を超えています');
+  });
+  $('#btnCopyCap').addEventListener('click', () => {
+    if (!txt.value.trim()) { toast('先に投稿文を生成してください'); return; }
+    copyText(txt.value, '投稿文をコピーしました');
+  });
+  $('#btnStock').addEventListener('click', () => {
+    if (!txt.value.trim()) { toast('先に投稿文を生成してください'); return; }
+    const entry = C.makeStockEntry(it, txt.value);
+    state.stock = C.mergeStock(state.stock, [entry]);
+    save();
+    toast('ストックに保存しました');
+  });
+  $('#btnAiPrompt').addEventListener('click', () => {
+    const tpl = state.templates[Number($('#cmpTpl').value)] || state.templates[0];
+    copyText(C.buildAiPrompt(it, tpl.name), 'AI用プロンプトをコピーしました');
+  });
+  $('#btnOpenRoom').addEventListener('click', () => window.open('https://room.rakuten.co.jp/', '_blank'));
+}
+
+// ---------- ストック ----------
+$$('#stockFilter .chip').forEach(ch => ch.addEventListener('click', () => {
+  ui.stockFilter = ch.dataset.f;
+  $$('#stockFilter .chip').forEach(x => x.classList.toggle('on', x === ch));
+  renderStock();
+}));
+
+function renderStock() {
+  const list = [...state.stock].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const filtered = ui.stockFilter === 'all' ? list : list.filter(e => e.status === ui.stockFilter);
+  const postedToday = state.stock.filter(e => e.status === 'posted' && String(e.postedAt || '').slice(0, 10) === today()).length;
+  $('#todayCount').textContent = `今日の投稿 ${postedToday}件`;
+  $('#stockList').innerHTML = filtered.length ? filtered.map(e => `
+    <div class="card" data-id="${esc(e.id)}">
+      <div class="row" style="justify-content:space-between">
+        <span class="chip ${e.status === 'posted' ? 'posted' : 'draft'}">${e.status === 'posted' ? '✅ 投稿済み' : '📝 下書き'}</span>
+        <span class="muted">${esc(String(e.updatedAt).slice(0, 10))}</span>
+      </div>
+      <div class="item-name" style="margin-top:6px">${esc(e.name)}</div>
+      <div class="item-meta"><span class="price">${esc(C.formatPrice(e.price))}円</span>／料率${esc(e.rate)}%</div>
+      <div class="caption-pre">${esc(e.caption)}</div>
+      <div class="row">
+        <button class="small primary" data-act="copy">📋 コピー</button>
+        <button class="small" data-act="toggle">${e.status === 'posted' ? '↩️ 下書きに戻す' : '✅ 投稿済みに'}</button>
+        <button class="small" data-act="open">商品ページ</button>
+        <button class="small danger" data-act="del">削除</button>
+      </div>
+    </div>`).join('')
+    : '<div class="card muted">ストックはまだありません。リサーチ→投稿文→「💾ストックへ」で貯まります。</div>';
+  $$('#stockList [data-act]').forEach(b => b.addEventListener('click', () => {
+    const id = b.closest('[data-id]').dataset.id;
+    const e = state.stock.find(x => x.id === id);
+    if (!e) return;
+    const act = b.dataset.act;
+    if (act === 'copy') copyText(e.caption, '投稿文をコピーしました');
+    if (act === 'open') window.open(e.url, '_blank');
+    if (act === 'toggle') {
+      if (e.status === 'posted') { e.status = 'draft'; delete e.postedAt; }
+      else { e.status = 'posted'; e.postedAt = new Date().toISOString(); }
+      e.updatedAt = new Date().toISOString();
+      save(); renderStock();
+    }
+    if (act === 'del') {
+      if (!confirm('このストックを削除しますか？')) return;
+      state.stock = state.stock.filter(x => x.id !== id);
+      save(); renderStock();
+    }
+  }));
+}
+
+// ---------- バックアップ ----------
+function exportAll() {
+  const data = {
+    app: 'roomNavi', version: 1, exportedAt: new Date().toISOString(),
+    settings: state.settings, templates: state.templates, hashtags: state.hashtags,
+    stock: state.stock, performance: state.performance
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'roomnavi-backup-' + today().replace(/-/g, '') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('書き出しました');
+}
+function importAll(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const j = JSON.parse(reader.result);
+      if (!j || j.app !== 'roomNavi') { toast('ROOMナビのバックアップではありません'); return; }
+      state.stock = C.mergeStock(state.stock, j.stock || []);
+      // 実績は日付キーで冪等マージ（取り込み側を優先）
+      const byDate = new Map(state.performance.map(e => [e.date, e]));
+      for (const e of (j.performance || [])) { if (e && e.date) byDate.set(e.date, e); }
+      state.performance = Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      if (Array.isArray(j.templates) && j.templates.length) state.templates = j.templates;
+      if (Array.isArray(j.hashtags) && j.hashtags.length) state.hashtags = j.hashtags;
+      if (j.settings && j.settings.applicationId && !state.settings.applicationId) state.settings = j.settings;
+      save();
+      renderStock(); renderPerf();
+      toast('取り込みました（重複はマージ済み）');
+    } catch (e) { toast('取り込み失敗: JSONが不正です'); }
+  };
+  reader.readAsText(file);
+}
+$('#btnExport').addEventListener('click', exportAll);
+$('#btnImport').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => {
+  if (e.target.files[0]) importAll(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ---------- 実績 ----------
+function renderPerf() {
+  if (!$('#pfDate').value) $('#pfDate').value = today();
+  const s = C.summarizePerformance(state.performance);
+  const thisMonth = today().slice(0, 7);
+  const m = s.byMonth[thisMonth] || { clicks: 0, orders: 0, reward: 0 };
+  $('#perfSummary').innerHTML = `
+    <div class="card">
+      <h2 style="margin-top:0">今月（${thisMonth}）</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="v">${C.formatPrice(m.clicks)}</div><div class="k">クリック</div></div>
+        <div class="stat"><div class="v">${C.formatPrice(m.orders)}</div><div class="k">成果件数</div></div>
+        <div class="stat"><div class="v">¥${C.formatPrice(m.reward)}</div><div class="k">報酬</div></div>
+      </div>
+      <div class="muted" style="margin-top:8px; text-align:center">累計報酬 ¥${C.formatPrice(s.totalReward)}（クリック${C.formatPrice(s.totalClicks)}・成果${C.formatPrice(s.totalOrders)}件）</div>
+    </div>`;
+  // 直近14日のクリック棒グラフ
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const e = state.performance.find(x => x.date === key);
+    days.push({ key, label: (d.getMonth() + 1) + '/' + d.getDate(), clicks: e ? (Number(e.clicks) || 0) : 0 });
+  }
+  const max = Math.max(1, ...days.map(d => d.clicks));
+  $('#perfChart').innerHTML = `
+    <div class="card">
+      <h2 style="margin-top:0">直近14日のクリック</h2>
+      <div class="bars">${days.map(d =>
+        `<div class="bar" style="height:${Math.round(d.clicks / max * 100)}%">${d.clicks ? `<span>${d.clicks}</span>` : ''}</div>`).join('')}
+      </div>
+      <div class="bar-labels">${days.map((d, i) => `<div>${i % 2 === 0 ? d.label : ''}</div>`).join('')}</div>
+    </div>`;
+  const recent = [...state.performance].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30);
+  $('#perfList').innerHTML = recent.length ? `
+    <div class="card">
+      <h2 style="margin-top:0">記録一覧</h2>
+      ${recent.map(e => `
+        <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0" data-date="${esc(e.date)}">
+          <span>${esc(e.date)}</span>
+          <span class="muted">${C.formatPrice(e.clicks || 0)}cl / ${C.formatPrice(e.orders || 0)}件 / ¥${C.formatPrice(e.reward || 0)}</span>
+          <button class="small danger" data-delperf="${esc(e.date)}">✕</button>
+        </div>`).join('')}
+    </div>` : '';
+  $$('#perfList [data-delperf]').forEach(b => b.addEventListener('click', () => {
+    state.performance = state.performance.filter(x => x.date !== b.dataset.delperf);
+    save(); renderPerf();
+  }));
+}
+$('#btnAddPerf').addEventListener('click', () => {
+  const date = $('#pfDate').value;
+  if (!date) { toast('日付を入れてください'); return; }
+  const entry = {
+    date,
+    clicks: Number($('#pfClicks').value) || 0,
+    orders: Number($('#pfOrders').value) || 0,
+    reward: Number($('#pfReward').value) || 0
+  };
+  state.performance = state.performance.filter(e => e.date !== date);
+  state.performance.push(entry);
+  state.performance.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  save();
+  $('#pfClicks').value = ''; $('#pfOrders').value = ''; $('#pfReward').value = '';
+  renderPerf();
+  toast('保存しました');
+});
+
+// ---------- 設定 ----------
+function renderSettings() {
+  $('#setAppId').value = state.settings.applicationId || '';
+  $('#setAffId').value = state.settings.affiliateId || '';
+  $('#setTags').value = state.hashtags.join(', ');
+  renderTplList();
+  renderSettingsMsg(C.validateSettings(state.settings), false);
+}
+function renderSettingsMsg(v, showOk) {
+  $('#settingsMsg').innerHTML =
+    v.errors.map(e => `<div class="err">✖ ${esc(e)}</div>`).join('') +
+    v.warnings.map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join('') +
+    (showOk && v.ok && !v.warnings.length ? '<div style="color:var(--ok); font-size:12.5px">✔ 設定OK</div>' : '');
+}
+$('#btnSaveSettings').addEventListener('click', () => {
+  state.settings.applicationId = $('#setAppId').value.trim();
+  state.settings.affiliateId = $('#setAffId').value.trim();
+  save();
+  const v = C.validateSettings(state.settings);
+  renderSettingsMsg(v, true);
+  toast(v.ok ? '保存しました' : '保存しました（要修正あり）');
+});
+$('#btnSaveTags').addEventListener('click', () => {
+  state.hashtags = $('#setTags').value.split(/[,、\n]/).map(s => s.trim()).filter(Boolean);
+  save();
+  toast('ハッシュタグを保存しました');
+});
+function renderTplList() {
+  $('#tplList').innerHTML = state.templates.map((t, i) => `
+    <div class="tpl-block" data-i="${i}">
+      <div class="row" style="justify-content:space-between; margin-bottom:6px">
+        <input type="text" value="${esc(t.name)}" data-tname="${i}" style="max-width:55%">
+        <button class="small danger" data-tdel="${i}">削除</button>
+      </div>
+      <textarea rows="5" data-tbody="${i}">${esc(t.body)}</textarea>
+    </div>`).join('') +
+    '<button style="width:100%; margin-bottom:8px" id="btnSaveTpl">テンプレを保存</button>';
+  $('#btnSaveTpl').addEventListener('click', () => {
+    state.templates = state.templates.map((t, i) => ({
+      id: t.id || 'tpl' + i,
+      name: $(`[data-tname="${i}"]`).value.trim() || ('テンプレ' + (i + 1)),
+      body: $(`[data-tbody="${i}"]`).value
+    }));
+    save();
+    toast('テンプレを保存しました');
+  });
+  $$('#tplList [data-tdel]').forEach(b => b.addEventListener('click', () => {
+    if (state.templates.length <= 1) { toast('最後の1件は削除できません'); return; }
+    if (!confirm('このテンプレを削除しますか？')) return;
+    state.templates.splice(Number(b.dataset.tdel), 1);
+    save(); renderTplList();
+  }));
+}
+$('#btnAddTpl').addEventListener('click', () => {
+  state.templates.push({ id: 'tpl' + Date.now(), name: '新テンプレ', body: '{name}\n\n▶ {price}円\n\n{point}\n\n{tags}' });
+  save(); renderTplList();
+});
+$('#btnResetTpl').addEventListener('click', () => {
+  if (!confirm('テンプレを初期状態に戻しますか？（自作テンプレは消えます）')) return;
+  state.templates = JSON.parse(JSON.stringify(C.DEFAULT_TEMPLATES));
+  save(); renderTplList();
+});
+$('#btnExport2').addEventListener('click', exportAll);
+$('#btnImport2').addEventListener('click', () => $('#importFile').click());
+$('#btnWipe').addEventListener('click', () => {
+  if (!confirm('全データ（設定・ストック・実績）を削除します。よろしいですか？')) return;
+  if (!confirm('本当に削除しますか？バックアップ書き出しは済んでいますか？')) return;
+  localStorage.removeItem(DB_KEY);
+  state = defaults();
+  renderSettings(); renderStock(); renderPerf();
+  toast('初期化しました');
+});
+
+// ---------- 起動 ----------
+if (!state.settings.applicationId) {
+  showTab('settings');
+} else {
+  showTab('research');
+}
+})();
+</script>
+</body>
+</html>
