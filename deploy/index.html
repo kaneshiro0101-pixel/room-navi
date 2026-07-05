@@ -271,16 +271,30 @@ const RoomCore = (() => {
 
   const DEFAULT_HASHTAGS = ['楽天ROOM', '楽天roomに載せてます', '楽天購入品', 'お買い物マラソン', '楽天セール'];
 
+  // ROOMの定石: 冒頭28字フック / 本文80〜150字 / 感想・ベネフィット明記 / タグ3〜8 / {reviews}で社会的証明
   const DEFAULT_TEMPLATES = [
     { id: 'nayami', name: '悩み解決', body:
-      '＼{point}／\n\n{name}\n\n▶ {price}円\n\nこういうのでいいんだよ、が見つかった◎\nレビュー評価も高くてリピーター多めの人気商品です。\n\n{tags}' },
+      '{point}、と思ってませんか？\n\nこれで解決しました◎\n{name}\n▶ {price}円 {reviews}\n\n使い始めてから本気でラクになりました。\n\n{tags}' },
     { id: 'review', name: '愛用レビュー風', body:
-      'これ、正直もっと早く買えばよかった…！\n\n{name}\n\n▶ {price}円\n\n{point}\n使ってみた感想は「戻れない」の一言。\n気になってる人は覗いてみてください👇\n\n{tags}' },
+      'これ、もっと早く買えばよかった…！\n\n{name}\n▶ {price}円 {reviews}\n\n{point}。使った感想は「戻れない」の一言です😊\n\n{tags}' },
     { id: 'hikaku', name: '比較・選び方', body:
-      '【{point}】\n\n似た商品を散々比較して、最終的にこれにしました。\n\n{name}\n\n▶ {price}円\n\n決め手はレビューの多さと価格のバランス。\n迷ってる人の参考になれば◎\n\n{tags}' },
+      '＼散々比較して、これでした／\n\n{name}\n▶ {price}円 {reviews}\n\n決め手は{point}。迷ってる人にもおすすめです◎\n\n{tags}' },
     { id: 'season', name: '季節・イベント', body:
-      '{point}はこれで決まり🎉\n\n{name}\n\n▶ {price}円\n\n毎年この時期は売り切れがちなので、早めのチェックがおすすめです。\n\n{tags}' }
+      '＼{point}はこれで決まり／\n\n{name}\n▶ {price}円 {reviews}\n\n毎年この時期は売り切れがちなので、早めが安心です🎁\n\n{tags}' },
+    { id: 'sale', name: 'お得・セール', body:
+      '【{point}】今が買い時かも🛒\n\n{name}\n▶ {price}円 {reviews}\n\nセールやクーポン対象になってたら即カート推奨です。\n\n{tags}' },
+    { id: 'yobikake', name: '呼びかけ', body:
+      '{point}な人に届いてほしい！\n\n{name}\n▶ {price}円 {reviews}\n\n私は使ってみて手放せなくなりました😊\n\n{tags}' }
   ];
+
+  // 薬機法・景表法で危ない言い切り/誇大表現（検出して警告する）
+  const NG_WORDS = ['絶対', '必ず', '100%', '100％', '治る', '治った', '効果は確実', '最安値',
+    'No.1', 'NO.1', 'No1', 'ナンバーワン', '日本一', '世界一', '副作用なし', '痩せます', '確実に稼げ', '誰でも儲か'];
+
+  // 「使ってどう良くなるか」が書けているかの判定語
+  const BENEFIT_WORDS = ['ラク', 'らく', '楽に', '便利', '時短', '助かる', '嬉しい', 'よかった',
+    'おすすめ', 'オススメ', 'リピ', '愛用', '解決', '捗', '最高', 'お得', '送料無料', 'セール',
+    'クーポン', 'ポイント', '戻れない', '手放せ', '安心', '買い時', 'ご褒美'];
 
   const GENRES = [
     ['', 'ジャンル指定なし（総合）'],
@@ -425,6 +439,13 @@ const RoomCore = (() => {
     return out;
   }
 
+  function reviewProof(item) {
+    const c = Number(item && item.reviewCount) || 0;
+    const a = Number(item && item.reviewAverage) || 0;
+    if (c < 10 || a <= 0) return '';
+    return '★' + a + '(' + formatPrice(c) + '件)';
+  }
+
   function generateCaption(item, template, opts) {
     opts = opts || {};
     const tags = buildHashtags(opts.tags || []);
@@ -435,11 +456,60 @@ const RoomCore = (() => {
       shop: String((item && item.shop) || ''),
       point: String(opts.point || ''),
       tags: tags.join(' '),
+      reviews: reviewProof(item),
       url: String((item && (item.affiliateUrl || item.url)) || '')
     };
     const text = String(template || '')
-      .replace(/\{(name|price|rate|shop|point|tags|url)\}/g, (_, k) => map[k] != null ? map[k] : '');
+      .replace(/\{(name|price|rate|shop|point|tags|reviews|url)\}/g, (_, k) => map[k] != null ? map[k] : '');
     return { text, length: text.length, ok: text.length > 0 && text.length <= 1000 };
+  }
+
+  function analyzeCaption(text) {
+    const t = String(text || '');
+    const advice = [];
+    const tags = t.match(/#[^\s#]+/g) || [];
+    const body = t.replace(/#[^\s#]+/g, '').trim();
+    const len = body.length;
+    const lines = t.split('\n');
+    const firstLine = (lines.find(l => l.trim()) || '').trim();
+    let emoji = 0;
+    try { emoji = (t.match(/\p{Extended_Pictographic}/gu) || []).length; } catch (e) { }
+    const ngWords = NG_WORDS.filter(w => t.includes(w));
+    let score = 0;
+    // 本文の長さ（タグ除く）: 80〜150字が定石。60〜200で満点扱い
+    if (len >= 60 && len <= 200) score += 25;
+    else if (len >= 40 && len <= 300) {
+      score += 12;
+      advice.push(len < 60 ? '本文がやや短め。感想やベネフィットを一言足して80〜150字に' : '本文がやや長め。80〜150字がスマホで読み切れる長さです');
+    } else {
+      advice.push(len < 40 ? '本文が短すぎます（タグを除いて80〜150字が目安）。何が良かったかを自分の言葉で1〜2文' : '本文が長すぎます。80〜150字目安に削りましょう');
+    }
+    // 1行目フック: 一覧では冒頭しか見えない
+    if (firstLine && firstLine.length <= 28) {
+      score += 10;
+      if (/[？?！!＼【]|\p{Extended_Pictographic}/u.test(firstLine)) score += 5;
+      else advice.push('1行目に「？」の問いかけや「＼〜／」を入れるとタップされやすい');
+    } else {
+      advice.push('1行目（冒頭）は28字以内の短いフックに。一覧では最初の1行しか見えません');
+    }
+    // ベネフィット・感想
+    if (BENEFIT_WORDS.some(w => t.includes(w))) score += 15;
+    else advice.push('「使ってどう良くなったか」の言葉を（例: ラクになった / 戻れない / 時短）');
+    // ハッシュタグ
+    if (tags.length >= 3 && tags.length <= 8) score += 15;
+    else if (tags.length >= 1) { score += 8; advice.push('ハッシュタグは3〜8個が目安（商品名・カテゴリ・季節を混ぜる）'); }
+    else advice.push('ハッシュタグがありません。検索・タグフォロー流入を逃します（3〜8個）');
+    // 改行・余白
+    if (lines.filter(l => l.trim()).length >= 3) score += 10;
+    else advice.push('改行で3ブロック構成に（フック→商品情報→感想）');
+    // 絵文字
+    if (emoji >= 1 && emoji <= 6) score += 10;
+    else if (emoji === 0) advice.push('絵文字を1〜3個入れると柔らかくなります');
+    else advice.push('絵文字が多すぎるかも（1〜6個が目安）');
+    // NGワード
+    if (ngWords.length === 0) score += 10;
+    else advice.push('言い切り・誇大表現は薬機法/景表法NGの恐れ: 「' + ngWords.join('」「') + '」→ 個人の感想の書き方に');
+    return { score, advice, ngWords, stats: { length: len, tagCount: tags.length, emoji, firstLine } };
   }
 
   function buildAiPrompt(item, angle) {
@@ -455,7 +525,8 @@ const RoomCore = (() => {
       '',
       '【条件】',
       '・切り口: ' + String(angle || 'おまかせ'),
-      '・各案130〜250文字、絵文字は2〜4個まで',
+      '・構成: 1行目は28字以内のフック（問いかけ か ＼〜／）→ 商品名・価格 → ベネフィットと個人の感想 → ハッシュタグ',
+      '・本文はハッシュタグを除いて80〜150文字（楽天ROOMで最も読まれる長さ）、絵文字は2〜4個まで',
       '・「絶対」「必ず◯◯できる」等の断定・誇大表現、効果効能の言い切り（薬機法・景表法NG）は使わない',
       '・実体験風でも個人の感想と分かる書き方にする',
       '・各案の最後にハッシュタグ5個（#楽天ROOM を含める）'
@@ -532,6 +603,7 @@ const RoomCore = (() => {
     buildSearchUrl, buildRankingUrl, parseItems,
     expectedCommission, priceBandBonus, calcScore,
     shortenName, formatPrice, buildHashtags, generateCaption, buildAiPrompt,
+    reviewProof, analyzeCaption, NG_WORDS,
     mergeStock, validateSettings, summarizePerformance, makeStockEntry
   };
 })();
@@ -786,6 +858,7 @@ function renderCompose() {
       <div style="height:10px"></div>
       <label>投稿文（編集OK）<span id="cmpCount" class="muted"></span></label>
       <textarea id="cmpText" rows="9"></textarea>
+      <div id="capAnalysis"></div>
       <div style="height:10px"></div>
       <div class="row">
         <button class="grow primary" id="btnCopyCap">📋 投稿文をコピー</button>
@@ -804,10 +877,26 @@ function renderCompose() {
       </div>
     </div>`;
   const txt = $('#cmpText');
+  const renderAnalysis = () => {
+    const box = $('#capAnalysis');
+    if (!txt.value.trim()) { box.innerHTML = ''; return; }
+    const a = C.analyzeCaption(txt.value);
+    const col = a.score >= 80 ? 'var(--ok)' : (a.score >= 60 ? 'var(--warn)' : 'var(--bad)');
+    const label = a.score >= 80 ? 'そのまま投稿OK' : (a.score >= 60 ? 'あと一歩' : '要修正');
+    box.innerHTML = `
+      <div style="border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--card2); margin-top:8px">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:${a.advice.length ? '6px' : '0'}">
+          <b style="color:${col}; font-size:14px">投稿文スコア ${a.score}点</b>
+          <span class="chip" style="color:${col}; border-color:${col}">${label}</span>
+        </div>
+        ${a.advice.slice(0, 4).map(s => `<div class="small-note">・${esc(s)}</div>`).join('')}
+      </div>`;
+  };
   const updateCount = () => {
     const n = txt.value.length;
     $('#cmpCount').textContent = ` ${n}/1000字` + (n > 1000 ? ' ⚠️超過' : '');
     $('#cmpCount').className = n > 1000 ? 'err' : 'muted';
+    renderAnalysis();
   };
   txt.value = ui.composeCaption || '';
   updateCount();

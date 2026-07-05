@@ -254,6 +254,74 @@ test('DEFAULT_TEMPLATES: 4種あり、サンプル商品で1000字以内', () =>
   }
 });
 
+// ---- レビュー実績の差し込み ----
+test('reviewProof: レビュー10件以上なら★と件数の証明文', () => {
+  assert.equal(Core.reviewProof({ reviewCount: 999, reviewAverage: 4.5 }), '★4.5(999件)');
+  assert.equal(Core.reviewProof({ reviewCount: 12345, reviewAverage: 4.21 }), '★4.21(12,345件)');
+});
+
+test('reviewProof: レビューが少ない/無い場合は空文字', () => {
+  assert.equal(Core.reviewProof({ reviewCount: 3, reviewAverage: 5 }), '');
+  assert.equal(Core.reviewProof({}), '');
+});
+
+test('generateCaption: {reviews} が差し込まれる', () => {
+  const item = Core.parseItems(fv2Response)[0]; // 999件 ★4.5
+  const r = Core.generateCaption(item, '{name} {reviews}', {});
+  assert.ok(r.text.includes('★4.5(999件)'));
+});
+
+// ---- 投稿文の分析 ----
+const GOOD_CAPTION = 'ポーチの中、ゴチャゴチャしてませんか？\n\nこれで解決しました◎\n炭酸水メーカー スリム型\n▶ 2,980円 ★4.5(999件)\n\n使い始めてから本気でラクになりました😊\n\n#楽天ROOM #収納 #便利グッズ';
+
+test('analyzeCaption: 定石どおりの投稿文は高スコア', () => {
+  const a = Core.analyzeCaption(GOOD_CAPTION);
+  assert.ok(a.score >= 80, 'score=' + a.score);
+  assert.equal(a.ngWords.length, 0);
+});
+
+test('analyzeCaption: NGワード(絶対/No.1等)を検出して減点・指摘', () => {
+  const bad = GOOD_CAPTION.replace('本気でラクになりました', '絶対に痩せます。効果No.1');
+  const a = Core.analyzeCaption(bad);
+  assert.ok(a.ngWords.includes('絶対'));
+  assert.ok(a.ngWords.some(w => /No\.?1/i.test(w)));
+  assert.ok(a.score < Core.analyzeCaption(GOOD_CAPTION).score);
+  assert.ok(a.advice.some(s => /景表法|薬機法|誇大|言い切り/.test(s)));
+});
+
+test('analyzeCaption: 短すぎる本文はアドバイスが出る', () => {
+  const a = Core.analyzeCaption('買った。\n#楽天ROOM #便利');
+  assert.ok(a.advice.some(s => /文字|短/.test(s)));
+});
+
+test('analyzeCaption: ハッシュタグ無しはアドバイスが出る', () => {
+  const a = Core.analyzeCaption('ポーチの中、整理しませんか？\n\nこれで解決しました◎\n使い始めてから本気でラクになりました。毎日の支度が2分短くなった感覚です。');
+  assert.ok(a.advice.some(s => /ハッシュタグ|タグ/.test(s)));
+});
+
+test('analyzeCaption: 1行目が長すぎるとフックのアドバイスが出る', () => {
+  const long1 = 'この商品は本当に素晴らしくて毎日使っていて家族全員が気に入っている自信を持っておすすめできる逸品です。\n\n▶ 2,980円\n\n#楽天ROOM #便利 #収納';
+  const a = Core.analyzeCaption(long1);
+  assert.ok(a.advice.some(s => /1行目|冒頭|フック/.test(s)));
+});
+
+test('analyzeCaption: 空文字でも壊れない', () => {
+  const a = Core.analyzeCaption('');
+  assert.equal(typeof a.score, 'number');
+  assert.ok(a.advice.length >= 1);
+});
+
+test('DEFAULT_TEMPLATES: 6種以上あり、全テンプレが分析スコア75点以上', () => {
+  assert.ok(Core.DEFAULT_TEMPLATES.length >= 6);
+  const item = Core.parseItems(fv2Response)[0];
+  for (const t of Core.DEFAULT_TEMPLATES) {
+    const r = Core.generateCaption(item, t.body, { point: 'ラベルレスで捨てるのがラク', tags: Core.DEFAULT_HASHTAGS });
+    const a = Core.analyzeCaption(r.text);
+    assert.ok(a.score >= 75, `${t.name}: score=${a.score} advice=${a.advice.join('/')}`);
+    assert.equal(a.ngWords.length, 0, t.name);
+  }
+});
+
 // ---- AIプロンプト ----
 test('buildAiPrompt: 商品情報と切り口が入る', () => {
   const item = Core.parseItems(fv2Response)[0];
