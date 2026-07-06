@@ -533,6 +533,20 @@ const RoomCore = (() => {
     ].join('\n');
   }
 
+  // テンプレ改訂時の自動移行: ユーザーが自作/追加していなければ新デフォルトに差し替える
+  const OLD_DEFAULT_TPL_IDS = ['nayami', 'review', 'hikaku', 'season'];
+  function migrateTemplates(stored) {
+    if (!Array.isArray(stored) || stored.length === 0) {
+      return { templates: JSON.parse(JSON.stringify(DEFAULT_TEMPLATES)), changed: true };
+    }
+    const onlyOldDefaults = stored.length <= OLD_DEFAULT_TPL_IDS.length &&
+      stored.every(t => t && OLD_DEFAULT_TPL_IDS.includes(t.id));
+    if (onlyOldDefaults) {
+      return { templates: JSON.parse(JSON.stringify(DEFAULT_TEMPLATES)), changed: true };
+    }
+    return { templates: stored, changed: false };
+  }
+
   function mergeStock(existing, incoming) {
     const map = new Map();
     for (const e of (existing || [])) {
@@ -603,7 +617,7 @@ const RoomCore = (() => {
     buildSearchUrl, buildRankingUrl, parseItems,
     expectedCommission, priceBandBonus, calcScore,
     shortenName, formatPrice, buildHashtags, generateCaption, buildAiPrompt,
-    reviewProof, analyzeCaption, NG_WORDS,
+    reviewProof, analyzeCaption, NG_WORDS, migrateTemplates,
     mergeStock, validateSettings, summarizePerformance, makeStockEntry
   };
 })();
@@ -628,6 +642,11 @@ const defaults = () => ({
   performance: []
 });
 let state = load();
+// テンプレ改訂の自動反映（自作テンプレがある場合は触らない）
+{
+  const m = C.migrateTemplates(state.templates);
+  if (m.changed) { state.templates = m.templates; save(); }
+}
 let ui = {
   mode: 'search', page: 1, lastQuery: null, results: [], resultCount: 0,
   selected: null, stockFilter: 'all', composeCaption: ''
