@@ -160,6 +160,17 @@ a{color:#6fb7ff;}
       </div>
     </div>
     <div id="stockList"></div>
+    <div class="card" id="snsStockCard">
+      <h2 style="margin-top:0">📣 SNSストック <span class="muted" id="snsStockCount"></span></h2>
+      <div class="small-note" style="margin-bottom:8px">
+        投稿文タブの「3つまとめてSNSストックへ」で貯めた X/Threads/Pinterest 投稿。
+        <b>SNS書き出し</b>で <code>sns-room.json</code> を出力→自動投稿ツールへ。
+      </div>
+      <div class="row">
+        <button class="grow primary" id="btnSnsExport">⬇️ SNS書き出し(sns-room.json)</button>
+        <button class="grow danger" id="btnSnsClear">SNSストックを空に</button>
+      </div>
+    </div>
     <div class="card">
       <div class="row">
         <button class="grow" id="btnExport">⬇️ バックアップ書き出し</button>
@@ -516,6 +527,121 @@ const RoomCore = (() => {
     return { score, advice, ngWords, stats: { length: len, tagCount: tags.length, emoji, firstLine } };
   }
 
+  // ===== SNS展開（X / Threads / Pinterest）=====
+  const SNS_PLATFORMS = [
+    { id: 'x', name: 'X', limit: 280, url: 'https://x.com/compose/post' },
+    { id: 'threads', name: 'Threads', limit: 500, url: 'https://www.threads.net' },
+    { id: 'pinterest', name: 'Pinterest', limit: 500, url: 'https://www.pinterest.jp/pin-builder/' }
+  ];
+  const X_LIMIT = 280;
+  const DISCLOSURE = '#PR';
+
+  // Xの重み付け字数（twitter-textのレンジに準拠・URLは23）。poster側 format.js と同アルゴリズム
+  const X_URL_RE = /https?:\/\/\S+/g;
+  const X_LIGHT_RANGES = [[0x0000, 0x10ff], [0x2000, 0x200d], [0x2010, 0x201f], [0x2032, 0x2037]];
+  function xWeight(cp) { return X_LIGHT_RANGES.some(([a, b]) => cp >= a && cp <= b) ? 1 : 2; }
+  function xLength(text) {
+    const s = String(text == null ? '' : text);
+    const urls = s.match(X_URL_RE) || [];
+    let rest = s;
+    for (const u of urls) rest = rest.replace(u, '');
+    let total = urls.length * 23;
+    for (const ch of rest.normalize('NFC')) total += xWeight(ch.codePointAt(0));
+    return total;
+  }
+
+  function hasDisclosure(text) {
+    return /#\s?pr\b|#\s?ad\b|＃\s?pr|広告|プロモーション|ＰＲ表記/i.test(String(text || ''));
+  }
+
+  function linkOf(item) {
+    return String((item && (item.affiliateUrl || item.url)) || '');
+  }
+
+  function buildXPost(item, opts) {
+    opts = opts || {};
+    const link = linkOf(item);
+    const tags = buildHashtags(opts.tags || []);
+    const price = formatPrice(item && item.price);
+    const rev = reviewProof(item);
+    const point = String(opts.point || '').trim();
+    const assemble = (nameMax, includeTags, includePoint) => {
+      const head = includePoint && point ? shortenName(point, 40) + '\n' : '';
+      const name = shortenName(item && item.name, nameMax);
+      const priceLine = '▶ ' + price + '円' + (rev ? ' ' + rev : '');
+      const tagLine = includeTags && tags.length ? '\n' + tags.join(' ') : '';
+      return head + name + '\n' + priceLine + '\n' + link + '\n' + DISCLOSURE + tagLine;
+    };
+    let text = assemble(40, true, true);
+    if (xLength(text) > X_LIMIT) text = assemble(30, true, true);
+    if (xLength(text) > X_LIMIT) text = assemble(24, false, true);
+    if (xLength(text) > X_LIMIT) text = assemble(18, false, false);
+    const length = xLength(text);
+    return { text, length, ok: length <= X_LIMIT && link !== '' };
+  }
+
+  function buildThreadsPost(item, opts) {
+    opts = opts || {};
+    const link = linkOf(item);
+    const tags = buildHashtags(opts.tags || []);
+    const price = formatPrice(item && item.price);
+    const rev = reviewProof(item);
+    const point = String(opts.point || '').trim();
+    const head = point ? shortenName(point, 60) + '\n\n' : '';
+    const name = shortenName(item && item.name, 60);
+    const tagLine = tags.length ? ' ' + tags.join(' ') : '';
+    let text = head + name + '\n▶ ' + price + '円' + (rev ? ' ' + rev : '') +
+      '\n' + link + '\n\n' + DISCLOSURE + tagLine;
+    if (text.length > 500) {
+      text = head + shortenName(item && item.name, 40) + '\n▶ ' + price + '円\n' + link + '\n\n' + DISCLOSURE;
+    }
+    return { text, length: text.length, ok: text.length <= 500 && link !== '' };
+  }
+
+  function buildPinterestPin(item, opts) {
+    opts = opts || {};
+    const link = linkOf(item);
+    const image = String((item && item.image) || '');
+    const tags = buildHashtags(opts.tags || []);
+    const price = formatPrice(item && item.price);
+    const rev = reviewProof(item);
+    const point = String(opts.point || '').trim();
+    const title = shortenName(item && item.name, 100);
+    const lines = [];
+    if (point) lines.push(shortenName(point, 60) + '。');
+    lines.push(shortenName(item && item.name, 60) + ' ▶ ' + price + '円' + (rev ? ' ' + rev : ''));
+    lines.push('詳細・購入はリンクから👉');
+    let description = lines.join('\n') + '\n\n' + DISCLOSURE + (tags.length ? ' ' + tags.join(' ') : '');
+    if (description.length > 500) description = description.slice(0, 490);
+    if (!hasDisclosure(description)) description += ' ' + DISCLOSURE;
+    const ok = title.length > 0 && image !== '' && hasDisclosure(description);
+    return { title, description, link, image, ok };
+  }
+
+  function makeSnsEntry(item, platform, opts, now) {
+    const ts = now || new Date().toISOString();
+    const id = String((item && item.id) || '');
+    const base = {
+      id: id + '__' + platform, acct: 'room', kind: platform, status: 'checked',
+      link: linkOf(item), image: String((item && item.image) || ''),
+      productId: id, name: String((item && item.name) || ''), createdAt: ts, updatedAt: ts
+    };
+    if (platform === 'x') return Object.assign(base, { body: buildXPost(item, opts).text });
+    if (platform === 'threads') return Object.assign(base, { body: buildThreadsPost(item, opts).text });
+    if (platform === 'pinterest') {
+      const p = buildPinterestPin(item, opts);
+      return Object.assign(base, { title: p.title, body: p.description });
+    }
+    throw new Error('未知のplatform: ' + platform);
+  }
+
+  function buildSnsExport(entries) {
+    return {
+      app: 'roomNaviSns', version: 1, exportedAt: new Date().toISOString(),
+      posts: Array.isArray(entries) ? entries : []
+    };
+  }
+
   function buildAiPrompt(item, angle) {
     return [
       'あなたは楽天ROOMで人気のインフルエンサーです。以下の商品について、楽天ROOMの「コレ!」に付けるオリジナルコメントを3案書いてください。',
@@ -622,6 +748,8 @@ const RoomCore = (() => {
     expectedCommission, priceBandBonus, calcScore,
     shortenName, formatPrice, buildHashtags, generateCaption, buildAiPrompt,
     reviewProof, analyzeCaption, NG_WORDS, migrateTemplates,
+    SNS_PLATFORMS, xLength, hasDisclosure, buildXPost, buildThreadsPost,
+    buildPinterestPin, makeSnsEntry, buildSnsExport,
     mergeStock, validateSettings, summarizePerformance, makeStockEntry
   };
 })();
@@ -643,6 +771,7 @@ const defaults = () => ({
   templates: JSON.parse(JSON.stringify(C.DEFAULT_TEMPLATES)),
   hashtags: [...C.DEFAULT_HASHTAGS],
   stock: [],
+  snsStock: [],
   performance: []
 });
 let state = load();
@@ -667,6 +796,7 @@ function load() {
       templates: Array.isArray(j.templates) && j.templates.length ? j.templates : d.templates,
       hashtags: Array.isArray(j.hashtags) && j.hashtags.length ? j.hashtags : d.hashtags,
       stock: Array.isArray(j.stock) ? j.stock : [],
+      snsStock: Array.isArray(j.snsStock) ? j.snsStock : [],
       performance: Array.isArray(j.performance) ? j.performance : []
     };
   } catch (e) { return defaults(); }
@@ -898,6 +1028,20 @@ function renderCompose() {
         使い方：①投稿文をコピー → ②商品ページを開く → ③ページ内の「ROOMに投稿」ボタン → ④コメント欄にペースト。<br>
         ROOM内で商品を探す必要はありません。もっと自然な文が欲しい時は「AI用プロンプト」をClaudeに貼ると3案作れます。
       </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">📣 SNSにも展開して集客</h2>
+      <div class="small-note" style="margin-bottom:8px">
+        ROOMだけでなく X / Threads / Pinterest にも同じ商品を投稿して流入を増やします。
+        全て<b>#PR（広告明示）</b>入り・楽天アフィリリンク付きで自動生成。ひとこと訴求は上の欄と共通です。
+      </div>
+      <div id="snsPanel"></div>
+      <div style="height:8px"></div>
+      <button class="primary" style="width:100%" id="btnSnsStock">💾 3つまとめてSNSストックへ</button>
+      <div class="small-note" style="margin-top:8px">
+        ストックした分は「ストック」タブの<b>SNS書き出し</b>で <code>sns-room.json</code> にまとめて出力 → 自動投稿ツール（sns-auto-poster）へ渡せます。
+      </div>
     </div>`;
   const txt = $('#cmpText');
   const renderAnalysis = () => {
@@ -947,6 +1091,63 @@ function renderCompose() {
   });
   $('#btnOpenItem').addEventListener('click', () => window.open(it.url, '_blank'));
   $('#btnOpenRoom').addEventListener('click', () => window.open('https://room.rakuten.co.jp/', '_blank'));
+
+  // --- SNS展開パネル ---
+  const snsOpts = () => ({ point: $('#cmpPoint').value, tags: state.hashtags });
+  const buildSns = (pid) => {
+    if (pid === 'x') return C.buildXPost(it, snsOpts());
+    if (pid === 'threads') return C.buildThreadsPost(it, snsOpts());
+    return C.buildPinterestPin(it, snsOpts());
+  };
+  const renderSns = () => {
+    const box = $('#snsPanel');
+    box.innerHTML = C.SNS_PLATFORMS.map(pf => {
+      const r = buildSns(pf.id);
+      const preview = pf.id === 'pinterest'
+        ? '【タイトル】' + r.title + '\n' + r.description
+        : r.text;
+      const len = pf.id === 'x' ? r.length : preview.length;
+      const okCol = r.ok ? 'var(--ok)' : 'var(--bad)';
+      const disc = C.hasDisclosure(preview);
+      return `<div class="tpl-block" data-pf="${pf.id}">
+        <div class="row" style="justify-content:space-between; margin-bottom:6px">
+          <b>${pf.name}</b>
+          <span class="muted" style="font-size:11.5px">
+            ${len}/${pf.limit}字
+            <span style="color:${disc ? 'var(--ok)' : 'var(--bad)'}">${disc ? '#PR✓' : '#PR✗'}</span>
+            ${pf.id === 'pinterest' ? `<span style="color:${it.image ? 'var(--ok)' : 'var(--bad)'}">画像${it.image ? '✓' : '✗'}</span>` : ''}
+          </span>
+        </div>
+        <div class="caption-pre" style="max-height:120px">${esc(preview)}</div>
+        <div class="row">
+          <button class="small primary grow" data-sns-copy="${pf.id}">📋 コピー</button>
+          <button class="small grow" data-sns-open="${pf.id}">${pf.name}を開く</button>
+        </div>
+      </div>`;
+    }).join('');
+    $$('#snsPanel [data-sns-copy]').forEach(b => b.addEventListener('click', () => {
+      const pid = b.dataset.snsCopy;
+      const r = buildSns(pid);
+      const text = pid === 'pinterest' ? r.description : r.text;
+      copyText(text, pf(pid).name + '用をコピーしました');
+      if (pid === 'pinterest') toast('Pinterestはタイトル/リンク/画像を貼付画面で設定してください');
+    }));
+    $$('#snsPanel [data-sns-open]').forEach(b => b.addEventListener('click', () => {
+      window.open(pf(b.dataset.snsOpen).url, '_blank');
+    }));
+  };
+  const pf = (id) => C.SNS_PLATFORMS.find(p => p.id === id) || {};
+  renderSns();
+  $('#cmpPoint').addEventListener('input', renderSns);
+  $('#btnSnsStock').addEventListener('click', () => {
+    const now = new Date().toISOString();
+    const entries = C.SNS_PLATFORMS.map(pf => C.makeSnsEntry(it, pf.id, snsOpts(), now));
+    const bad = entries.find(e => !C.hasDisclosure(e.body));
+    if (bad) { toast('広告明示(#PR)が入らないため中止しました'); return; }
+    state.snsStock = C.mergeStock(state.snsStock, entries);
+    save();
+    toast('X/Threads/Pinterest をSNSストックへ保存しました');
+  });
 }
 
 // ---------- ストック ----------
@@ -961,6 +1162,9 @@ function renderStock() {
   const filtered = ui.stockFilter === 'all' ? list : list.filter(e => e.status === ui.stockFilter);
   const postedToday = state.stock.filter(e => e.status === 'posted' && String(e.postedAt || '').slice(0, 10) === today()).length;
   $('#todayCount').textContent = `今日の投稿 ${postedToday}件`;
+  const snsPending = (state.snsStock || []).filter(e => e.status !== 'posted').length;
+  const snsCountEl = $('#snsStockCount');
+  if (snsCountEl) snsCountEl.textContent = snsPending ? `未書出し ${snsPending}件` : '（空）';
   $('#stockList').innerHTML = filtered.length ? filtered.map(e => `
     <div class="card" data-id="${esc(e.id)}">
       <div class="row" style="justify-content:space-between">
@@ -1004,7 +1208,7 @@ function exportAll() {
   const data = {
     app: 'roomNavi', version: 1, exportedAt: new Date().toISOString(),
     settings: state.settings, templates: state.templates, hashtags: state.hashtags,
-    stock: state.stock, performance: state.performance
+    stock: state.stock, snsStock: state.snsStock, performance: state.performance
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1014,6 +1218,22 @@ function exportAll() {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   toast('書き出しました');
 }
+function downloadJson(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function snsExport() {
+  const entries = (state.snsStock || []).filter(e => e.status !== 'posted');
+  if (!entries.length) { toast('SNSストックが空です（投稿文タブで貯めてください）'); return; }
+  const bad = entries.filter(e => !C.hasDisclosure(e.body));
+  if (bad.length) { toast('広告明示(#PR)の無い投稿があるため中止しました'); return; }
+  downloadJson(C.buildSnsExport(entries), 'sns-room.json');
+  toast(entries.length + '件を sns-room.json に書き出しました');
+}
 function importAll(file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -1021,6 +1241,7 @@ function importAll(file) {
       const j = JSON.parse(reader.result);
       if (!j || j.app !== 'roomNavi') { toast('ROOMナビのバックアップではありません'); return; }
       state.stock = C.mergeStock(state.stock, j.stock || []);
+      state.snsStock = C.mergeStock(state.snsStock || [], j.snsStock || []);
       // 実績は日付キーで冪等マージ（取り込み側を優先）
       const byDate = new Map(state.performance.map(e => [e.date, e]));
       for (const e of (j.performance || [])) { if (e && e.date) byDate.set(e.date, e); }
@@ -1036,6 +1257,13 @@ function importAll(file) {
   reader.readAsText(file);
 }
 $('#btnExport').addEventListener('click', exportAll);
+$('#btnSnsExport').addEventListener('click', snsExport);
+$('#btnSnsClear').addEventListener('click', () => {
+  if (!(state.snsStock || []).length) { toast('SNSストックは空です'); return; }
+  if (!confirm('SNSストックを空にしますか？（書き出し済みか確認してください）')) return;
+  state.snsStock = []; save(); renderStock();
+  toast('SNSストックを空にしました');
+});
 $('#btnImport').addEventListener('click', () => $('#importFile').click());
 $('#importFile').addEventListener('change', e => {
   if (e.target.files[0]) importAll(e.target.files[0]);

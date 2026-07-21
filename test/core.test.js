@@ -462,3 +462,113 @@ test('makeStockEntry: affiliateUrlが無ければitemUrl', () => {
   const e = Core.makeStockEntry({ id: 'x', name: 'n', price: 1, rate: 1, url: 'https://item', affiliateUrl: '' }, 'c', '2026-07-04T10:00:00.000Z');
   assert.equal(e.url, 'https://item');
 });
+
+// ---- SNS展開（X / Threads / Pinterest）----
+const snsItem = Core.parseItems(fv2Response)[0]; // 炭酸水/2980円/rate4/★4.5(999件)/affiliateUrl・image有り
+
+test('xLength: 日本語=2 / URL=23 / ASCII=1', () => {
+  assert.equal(Core.xLength('abc'), 3);
+  assert.equal(Core.xLength('あいう'), 6);
+  assert.equal(Core.xLength('https://a.co/xyz'), 23);
+  // 'あ'(2)+' '(1)+url(23)+' '(1)+'#PR'(3)=30
+  assert.equal(Core.xLength('あ https://a.co/x #PR'), 30);
+});
+
+test('hasDisclosure: #PR/広告 を検出、無ければfalse', () => {
+  assert.equal(Core.hasDisclosure('これいい #PR'), true);
+  assert.equal(Core.hasDisclosure('#ad nice'), true);
+  assert.equal(Core.hasDisclosure('これは広告です'), true);
+  assert.equal(Core.hasDisclosure('ただの感想です'), false);
+  assert.equal(Core.hasDisclosure(''), false);
+});
+
+test('buildXPost: #PRとアフィリリンクを含み280以内', () => {
+  const r = Core.buildXPost(snsItem, { point: '箱買いが正解', tags: ['#楽天ROOM', '#炭酸水'] });
+  assert.ok(r.text.includes('#PR'));
+  assert.ok(Core.hasDisclosure(r.text));
+  assert.ok(r.text.includes(snsItem.affiliateUrl));
+  assert.ok(r.ok);
+  assert.ok(r.length <= 280, 'len=' + r.length);
+  assert.equal(r.length, Core.xLength(r.text));
+});
+
+test('buildXPost: 商品名も訴求も長い最悪ケースでも280以内に収める', () => {
+  const big = { ...snsItem, name: 'あ'.repeat(120) };
+  const r = Core.buildXPost(big, { point: 'x'.repeat(80), tags: ['#a','#b','#c','#d','#e','#f'] });
+  assert.ok(r.length <= 280, 'len=' + r.length);
+  assert.ok(r.ok);
+  assert.ok(r.text.includes('#PR'));
+  assert.ok(r.text.includes(big.affiliateUrl));
+});
+
+test('buildXPost: affiliateUrl無ければ素の商品URL', () => {
+  const r = Core.buildXPost({ ...snsItem, affiliateUrl: '' }, {});
+  assert.ok(r.text.includes(snsItem.url));
+});
+
+test('buildThreadsPost: #PR/リンクを含み500以内', () => {
+  const r = Core.buildThreadsPost(snsItem, { point: '箱買いが正解', tags: ['#楽天ROOM'] });
+  assert.ok(r.text.includes('#PR'));
+  assert.ok(r.text.includes(snsItem.affiliateUrl));
+  assert.ok(r.ok);
+  assert.ok(r.length <= 500);
+});
+
+test('buildPinterestPin: title/description/link/image が揃い#PR入り', () => {
+  const r = Core.buildPinterestPin(snsItem, { point: '箱買いが正解', tags: ['#炭酸水'] });
+  assert.ok(r.title.length > 0 && r.title.length <= 100);
+  assert.ok(r.description.length <= 500);
+  assert.ok(Core.hasDisclosure(r.description));
+  assert.equal(r.link, snsItem.affiliateUrl);
+  assert.equal(r.image, snsItem.image);
+  assert.ok(r.ok);
+});
+
+test('buildPinterestPin: 画像が無ければ ok=false', () => {
+  const r = Core.buildPinterestPin({ ...snsItem, image: '' }, {});
+  assert.equal(r.ok, false);
+});
+
+test('makeSnsEntry: X用のposter取込エントリ', () => {
+  const now = '2026-07-06T00:00:00.000Z';
+  const e = Core.makeSnsEntry(snsItem, 'x', { point: '箱買い', tags: ['#炭酸水'] }, now);
+  assert.equal(e.id, 'shopA:10001__x');
+  assert.equal(e.acct, 'room');
+  assert.equal(e.kind, 'x');
+  assert.equal(e.status, 'checked');
+  assert.ok(Core.hasDisclosure(e.body));
+  assert.equal(e.link, snsItem.affiliateUrl);
+  assert.equal(e.productId, 'shopA:10001');
+});
+
+test('makeSnsEntry: Pinterest用はtitleとimageを持つ', () => {
+  const e = Core.makeSnsEntry(snsItem, 'pinterest', {}, '2026-07-06T00:00:00.000Z');
+  assert.equal(e.kind, 'pinterest');
+  assert.ok(e.title && e.title.length > 0);
+  assert.equal(e.image, snsItem.image);
+  assert.ok(Core.hasDisclosure(e.body));
+});
+
+test('makeSnsEntry: 不正platformはthrow', () => {
+  assert.throws(() => Core.makeSnsEntry(snsItem, 'tiktok', {}, 'x'), /platform/);
+});
+
+test('buildSnsExport: poster互換の形（app/version/posts）', () => {
+  const e1 = Core.makeSnsEntry(snsItem, 'x', {}, '2026-07-06T00:00:00.000Z');
+  const e2 = Core.makeSnsEntry(snsItem, 'threads', {}, '2026-07-06T00:00:00.000Z');
+  const out = Core.buildSnsExport([e1, e2]);
+  assert.equal(out.app, 'roomNaviSns');
+  assert.equal(out.version, 1);
+  assert.ok(out.exportedAt);
+  assert.equal(out.posts.length, 2);
+});
+
+test('buildSnsExport: 全postに広告明示が入る（ステマ規制）', () => {
+  const entries = ['x', 'threads', 'pinterest'].map(p => Core.makeSnsEntry(snsItem, p, {}, '2026-07-06T00:00:00.000Z'));
+  const out = Core.buildSnsExport(entries);
+  for (const p of out.posts) assert.ok(Core.hasDisclosure(p.body), p.kind + 'に広告明示なし');
+});
+
+test('SNS_PLATFORMS: x/threads/pinterest を定義', () => {
+  assert.equal(Core.SNS_PLATFORMS.map(p => p.id).sort().join(','), 'pinterest,threads,x');
+});
